@@ -27,6 +27,7 @@ import {
   ListItemText,
   MenuItem,
   Paper,
+  Popover,
   Select,
   Stack,
   Tab,
@@ -231,6 +232,205 @@ function matchesLocationQuery(row, quick, scopedColumns) {
   return fields.some((field) => String(typeof row[field] === 'object' ? JSON.stringify(row[field]) : row[field] ?? '').toLowerCase().includes(term));
 }
 
+function filterValueKey(value) {
+  if (value == null || value === '') return '';
+  return typeof value === 'object' ? JSON.stringify(value) : String(value);
+}
+
+function displayFilterValue(value) {
+  const key = filterValueKey(value);
+  return key || '(leeg)';
+}
+
+function getUniqueColumnValues(rows, field) {
+  const values = new Map();
+  rows.forEach((row) => {
+    const key = filterValueKey(row[field]);
+    const current = values.get(key) ?? { value: key, label: displayFilterValue(row[field]), count: 0 };
+    current.count += 1;
+    values.set(key, current);
+  });
+  return [...values.values()].sort((a, b) => a.label.localeCompare(b.label, 'nl-BE', { sensitivity: 'base', numeric: true }));
+}
+
+function matchesColumnValueFilters(row, filters) {
+  return Object.entries(filters).every(([field, selectedValues]) => {
+    if (!Array.isArray(selectedValues) || selectedValues.length === 0) return true;
+    return selectedValues.includes(filterValueKey(row[field]));
+  });
+}
+
+function ScopedColumnValuePicker({
+  options,
+  selectedFields,
+  onSelectedFieldsChange,
+  rows,
+  filters,
+  onFiltersChange,
+  label,
+  width
+}) {
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [activeField, setActiveField] = useState('');
+  const [valueQuery, setValueQuery] = useState('');
+  const [draftValues, setDraftValues] = useState([]);
+  const selectedColumns = options.filter((column) => selectedFields.includes(column.field));
+  const activeColumn = options.find((column) => column.field === activeField);
+  const uniqueValues = useMemo(() => {
+    if (!activeField) return [];
+    return getUniqueColumnValues(rows, activeField);
+  }, [rows, activeField]);
+  const visibleValues = useMemo(() => {
+    const term = valueQuery.trim().toLowerCase();
+    if (!term) return uniqueValues;
+    return uniqueValues.filter((item) => item.label.toLowerCase().includes(term));
+  }, [uniqueValues, valueQuery]);
+  const popoverOpen = Boolean(anchorEl && activeColumn);
+
+  function changeSelectedColumns(value) {
+    const nextFields = value.map((column) => column.field);
+    onSelectedFieldsChange(nextFields);
+    onFiltersChange((current) => Object.fromEntries(
+      Object.entries(current).filter(([field, values]) => nextFields.includes(field) && values.length > 0)
+    ));
+  }
+
+  function openValueFilter(event, field, ensureSelected = false) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (ensureSelected && !selectedFields.includes(field)) {
+      onSelectedFieldsChange([...selectedFields, field]);
+    }
+    setActiveField(field);
+    setValueQuery('');
+    setDraftValues(filters[field] ?? []);
+    setAnchorEl(event.currentTarget);
+  }
+
+  function toggleDraftValue(value) {
+    setDraftValues((current) => (
+      current.includes(value)
+        ? current.filter((item) => item !== value)
+        : [...current, value]
+    ));
+  }
+
+  function applyDraft() {
+    onFiltersChange((current) => {
+      const next = { ...current };
+      if (draftValues.length) next[activeField] = draftValues;
+      else delete next[activeField];
+      return next;
+    });
+    setAnchorEl(null);
+  }
+
+  function resetActiveFilter() {
+    setDraftValues([]);
+    onFiltersChange((current) => {
+      const next = { ...current };
+      delete next[activeField];
+      return next;
+    });
+  }
+
+  return (
+    <>
+      <Autocomplete
+        multiple
+        size="small"
+        options={options}
+        getOptionLabel={(option) => option.label}
+        value={options.filter((column) => selectedFields.includes(column.field))}
+        onChange={(_, value) => changeSelectedColumns(value)}
+        renderInput={(params) => <TextField {...params} label={label} />}
+        renderOption={(props, option, state) => {
+          const activeCount = filters[option.field]?.length ?? 0;
+          return (
+            <li {...props} className={`${props.className ?? ''} column-value-option`}>
+              <Box className="column-value-option-copy">
+                <Checkbox size="small" checked={state.selected} tabIndex={-1} />
+                <Typography variant="body2" noWrap title={option.label}>{option.label}</Typography>
+              </Box>
+              <Button
+                size="small"
+                variant="text"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={(event) => openValueFilter(event, option.field, true)}
+              >
+                {activeCount ? `${activeCount} actief` : 'Filter'}
+              </Button>
+            </li>
+          );
+        }}
+        PaperComponent={(paperProps) => (
+          <Paper {...paperProps}>
+            {paperProps.children}
+            <Divider />
+            <Box className="column-value-filter-footer" onMouseDown={(event) => event.preventDefault()}>
+              <Typography variant="caption" className="column-value-filter-title">Filters per kolom</Typography>
+              {selectedColumns.length === 0 && (
+                <Typography variant="caption" color="text.secondary">Selecteer kolommen om waarde-filters te tonen.</Typography>
+              )}
+              {selectedColumns.map((column) => {
+                const activeCount = filters[column.field]?.length ?? 0;
+                return (
+                  <Box key={column.field} className="column-value-filter-row">
+                    <Typography variant="body2" noWrap title={column.label}>{column.label}</Typography>
+                    <Button size="small" variant="text" onClick={(event) => openValueFilter(event, column.field)}>
+                      {activeCount ? `${activeCount} actief` : 'Filter waarden...'}
+                    </Button>
+                  </Box>
+                );
+              })}
+            </Box>
+          </Paper>
+        )}
+        sx={{ width }}
+      />
+      <Popover
+        open={popoverOpen}
+        anchorEl={anchorEl}
+        onClose={() => setAnchorEl(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        PaperProps={{ className: 'column-value-popover' }}
+      >
+        <Stack spacing={1}>
+          <Box>
+            <Typography variant="subtitle2">{activeColumn?.label}</Typography>
+            <Typography variant="caption" color="text.secondary">Unieke waarden in huidige griddata</Typography>
+          </Box>
+          <TextField
+            size="small"
+            value={valueQuery}
+            onChange={(event) => setValueQuery(event.target.value)}
+            placeholder="Zoek waarde"
+            InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }}
+          />
+          <List dense className="column-value-list">
+            {visibleValues.map((item) => (
+              <ListItemButton key={item.value} dense onClick={() => toggleDraftValue(item.value)}>
+                <Checkbox size="small" edge="start" checked={draftValues.includes(item.value)} tabIndex={-1} />
+                <ListItemText
+                  primary={item.label}
+                  secondary={`${item.count.toLocaleString('nl-BE')} rijen`}
+                  primaryTypographyProps={{ noWrap: true, title: item.label }}
+                />
+              </ListItemButton>
+            ))}
+            {visibleValues.length === 0 && <Typography variant="body2" color="text.secondary" className="column-value-empty">Geen waarden gevonden.</Typography>}
+          </List>
+          <Stack direction="row" spacing={1} justifyContent="flex-end">
+            <Button size="small" onClick={resetActiveFilter}>Reset</Button>
+            <Button size="small" variant="contained" onClick={applyDraft}>Apply</Button>
+          </Stack>
+        </Stack>
+      </Popover>
+    </>
+  );
+}
+
 function matchesTreeQuery(node, query) {
   if (!query) return true;
   const term = query.toLowerCase();
@@ -383,6 +583,7 @@ function LocationsPage() {
   const [detailTab, setDetailTab] = useState('overview');
   const [columns, setColumns] = useState(defaultLocationColumns);
   const [scopedColumns, setScopedColumns] = useState([]);
+  const [columnValueFilters, setColumnValueFilters] = useState({});
   const [sort, setSort] = useState([{ field: 'code', direction: 'asc' }]);
   const [layoutWidths, setLayoutWidths] = useState({ tree: 380, controls: 360, detail: 340 });
   const locationGridRef = useRef(null);
@@ -403,7 +604,10 @@ function LocationsPage() {
     [filteredTreeNodes, treeSearch, treeConfidenceFilter]
   );
   const visibleSearchableColumns = columns.filter((column) => column.visible && ['text', 'jsonb'].includes(column.type));
-  const filteredRows = useMemo(() => rows.filter((row) => matchesLocationQuery(row, queryText, scopedColumns)), [rows, queryText, scopedColumns]);
+  const filteredRows = useMemo(
+    () => rows.filter((row) => matchesLocationQuery(row, queryText, scopedColumns) && matchesColumnValueFilters(row, columnValueFilters)),
+    [rows, queryText, scopedColumns, columnValueFilters]
+  );
   const orderedLocationColumns = useMemo(() => [...columns].sort((a, b) => {
     const pinRank = { left: 0, null: 1, right: 2 };
     const aRank = pinRank[a.pin ?? 'null'];
@@ -505,6 +709,11 @@ function LocationsPage() {
       const currentColumn = current.find((column) => column.field === field);
       const nextVisible = !currentColumn?.visible;
       if (!nextVisible) setScopedColumns((currentScoped) => currentScoped.filter((columnField) => columnField !== field));
+      if (!nextVisible) setColumnValueFilters((currentFilters) => {
+        const nextFilters = { ...currentFilters };
+        delete nextFilters[field];
+        return nextFilters;
+      });
       return current.map((column) => column.field === field ? { ...column, visible: nextVisible } : column);
     });
   }
@@ -528,6 +737,7 @@ function LocationsPage() {
   function resetLocationView() {
     setColumns(defaultLocationColumns());
     setScopedColumns([]);
+    setColumnValueFilters({});
     setQueryText('');
     setTreeSearch('');
     setTreeConfidenceFilter('all');
@@ -648,15 +858,15 @@ function LocationsPage() {
               sx={{ flex: 1 }}
               InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }}
             />
-            <Autocomplete
-              multiple
-              size="small"
+            <ScopedColumnValuePicker
               options={visibleSearchableColumns}
-              getOptionLabel={(option) => option.label}
-              value={visibleSearchableColumns.filter((column) => scopedColumns.includes(column.field))}
-              onChange={(_, value) => setScopedColumns(value.map((column) => column.field))}
-              renderInput={(params) => <TextField {...params} label="Zoek enkel in zichtbare kolommen" />}
-              sx={{ width: 360 }}
+              selectedFields={scopedColumns}
+              onSelectedFieldsChange={setScopedColumns}
+              rows={rows}
+              filters={columnValueFilters}
+              onFiltersChange={setColumnValueFilters}
+              label="Zoek enkel in zichtbare kolommen"
+              width={360}
             />
             <Tooltip title={controlOpen ? 'Controls verbergen' : 'Controls tonen'}>
               <IconButton onClick={() => setControlOpen((open) => !open)} color={controlOpen ? 'secondary' : 'primary'}><TuneIcon /></IconButton>

@@ -122,6 +122,116 @@ mark {
   overflow: auto;
 }
 
+.column-value-filter-footer {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  background: #f8fafc;
+  border-top: 1px solid rgba(31, 41, 51, 0.08);
+}
+
+.column-value-option {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between !important;
+  gap: 8px;
+  min-height: 34px;
+  padding-right: 8px !important;
+}
+
+.column-value-option-copy {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.column-value-option-copy .MuiCheckbox-root {
+  padding: 2px;
+}
+
+.column-value-option-copy .MuiTypography-root {
+  min-width: 0;
+  color: #334155;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.column-value-option .MuiButton-root {
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 2px 6px;
+  border-radius: 5px;
+  color: #2563eb;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.column-value-filter-title {
+  color: #64748b;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.column-value-filter-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+}
+
+.column-value-filter-row .MuiTypography-root {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.column-value-filter-row .MuiButton-root {
+  min-width: 0;
+  padding: 2px 6px;
+  border-radius: 5px;
+  color: #2563eb;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.column-value-popover {
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  padding: 12px;
+  border: 1px solid rgba(31, 41, 51, 0.12);
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.14);
+}
+
+.column-value-list {
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid rgba(31, 41, 51, 0.1);
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.column-value-list .MuiListItemButton-root {
+  min-height: 34px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+.column-value-list .MuiListItemText-primary {
+  font-size: 12.5px;
+}
+
+.column-value-list .MuiListItemText-secondary {
+  font-size: 10.5px;
+}
+
+.column-value-empty {
+  padding: 10px;
+}
+
 .saved-view {
   padding: 12px;
 }

@@ -1,4 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE IF NOT EXISTS customers (
   id BIGSERIAL PRIMARY KEY,
@@ -82,6 +83,35 @@ CREATE TABLE IF NOT EXISTS audit_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS location_type (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT
+);
+
+CREATE TABLE IF NOT EXISTS location (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  parent_id UUID REFERENCES location(id) ON DELETE RESTRICT,
+  type_id UUID REFERENCES location_type(id),
+  code TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  complex_code TEXT,
+  complex_name TEXT,
+  abbreviation TEXT,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  source TEXT,
+  source_page INTEGER,
+  source_section TEXT,
+  confidence TEXT NOT NULL DEFAULT 'derived',
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT location_confidence_check
+    CHECK (confidence IN ('explicit', 'derived', 'inferred'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_projects_customer_id ON projects(customer_id);
 CREATE INDEX IF NOT EXISTS idx_tickets_project_id ON tickets(project_id);
 CREATE INDEX IF NOT EXISTS idx_time_entries_ticket_id ON time_entries(ticket_id);
@@ -93,3 +123,6 @@ CREATE INDEX IF NOT EXISTS idx_time_entries_note_trgm ON time_entries USING gin 
 CREATE INDEX IF NOT EXISTS idx_time_entries_attributes_gin ON time_entries USING gin (attributes);
 CREATE INDEX IF NOT EXISTS idx_documents_search_vector ON documents USING gin(search_vector);
 CREATE INDEX IF NOT EXISTS idx_documents_properties_gin ON documents USING gin(properties);
+CREATE INDEX IF NOT EXISTS idx_location_parent_id ON location(parent_id);
+CREATE INDEX IF NOT EXISTS idx_location_complex_code ON location(complex_code);
+CREATE INDEX IF NOT EXISTS idx_location_metadata ON location USING gin(metadata);

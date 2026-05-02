@@ -39,7 +39,7 @@ services:
     build: .
     command: npm run dev:web
     environment:
-      VITE_API_BASE: http://localhost:4174
+      VITE_API_BASE: http://host.docker.internal:4174
     ports:
       - "5173:5173"
     volumes:

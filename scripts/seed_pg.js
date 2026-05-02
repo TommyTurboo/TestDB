@@ -23,6 +23,75 @@ const consultants = ['Ada', 'Linus', 'Grace', 'Margaret', 'Ken', 'Barbara', 'Don
 const roles = ['Analyst', 'Developer', 'Architect', 'Tester', 'Data Engineer', 'Project Manager'];
 const docTypes = ['Decision', 'Specification', 'Meeting notes', 'Runbook', 'Research'];
 const actions = ['created', 'updated', 'assigned', 'commented', 'closed', 'reopened'];
+const locationTypes = [
+  ['project', 'Project'],
+  ['complex', 'Stuwsluiscomplex'],
+  ['asset_zone', 'Installatiezone'],
+  ['building', 'Gebouw'],
+  ['room', 'Lokaal'],
+  ['technical_space', 'Technische ruimte'],
+  ['bank', 'Oever'],
+  ['structure_part', 'Constructiedeel'],
+  ['cable_route', 'Kabelroute'],
+  ['equipment_zone', 'Uitrustingszone']
+];
+
+const locationSeed = [
+  { code: 'PROJECT-KANAAL-BOVEN-SCHELDE', name: 'Kanaal Bossuit-Kortrijk en Boven-Schelde', type: 'project', sort: 1, confidence: 'explicit', sourcePage: 1, children: [
+    { code: 'ASPER', name: 'Asper', type: 'complex', complexCode: 'ASPER', complexName: 'Stuwsluiscomplex Asper', abbreviation: 'ASP', sourcePage: 12, confidence: 'explicit', children: [
+      { code: 'ASPER-SLUIS', name: 'Sluis Asper', type: 'asset_zone', sort: 10, children: [
+        { code: 'ASPER-SLUIS-BOVENHOOFD', name: 'Bovenhoofd', type: 'structure_part', sourcePage: 18 },
+        { code: 'ASPER-SLUIS-BENEDENHOOFD', name: 'Benedenhoofd', type: 'structure_part', sourcePage: 19 },
+        { code: 'ASPER-SLUIS-KOLK', name: 'Kolkomgeving', type: 'equipment_zone', confidence: 'derived' }
+      ] },
+      { code: 'ASPER-STUW', name: 'Stuw Asper', type: 'asset_zone', sort: 20, children: [
+        { code: 'ASPER-STUW-LINKEROEVER', name: 'Linkeroever stuw', type: 'bank' },
+        { code: 'ASPER-STUW-RECHTEROEVER', name: 'Rechteroever stuw', type: 'bank' },
+        { code: 'ASPER-STUW-BORDES', name: 'Bedieningsbordes', type: 'structure_part', confidence: 'inferred' }
+      ] },
+      { code: 'ASPER-VISPASSAGE', name: 'Vispassage Asper', type: 'asset_zone', sort: 30 },
+      { code: 'ASPER-DIENSTGEBOUW', name: 'Dienstgebouw Asper', type: 'building', sort: 40, children: [
+        { code: 'ASPER-DIENSTGEBOUW-TECH-01', name: 'Technisch lokaal 01', type: 'technical_space', abbreviation: 'TL01' },
+        { code: 'ASPER-DIENSTGEBOUW-BEDIENING', name: 'Bedieningslokaal', type: 'room' }
+      ] },
+      { code: 'ASPER-KABELGANG-NOORD', name: 'Kabelgang noord', type: 'cable_route', sort: 50 }
+    ] },
+    { code: 'OUDENAARDE', name: 'Oudenaarde', type: 'complex', complexCode: 'OUD', complexName: 'Stuwsluiscomplex Oudenaarde', abbreviation: 'OUD', sourcePage: 42, confidence: 'explicit', children: [
+      { code: 'OUD-SLUIS', name: 'Sluis Oudenaarde', type: 'asset_zone', sort: 10, children: [
+        { code: 'OUD-SLUIS-BOVENHOOFD', name: 'Bovenhoofd', type: 'structure_part' },
+        { code: 'OUD-SLUIS-BENEDENHOOFD', name: 'Benedenhoofd', type: 'structure_part' }
+      ] },
+      { code: 'OUD-STUW', name: 'Stuw Oudenaarde', type: 'asset_zone', sort: 20, children: [
+        { code: 'OUD-STUW-LINKEROEVER', name: 'Linkeroever', type: 'bank' },
+        { code: 'OUD-STUW-RECHTEROEVER', name: 'Rechteroever', type: 'bank' }
+      ] },
+      { code: 'OUD-VISPASSAGE', name: 'Vispassage Oudenaarde', type: 'asset_zone', sort: 30 },
+      { code: 'OUD-DIENSTGEBOUW', name: 'Dienstgebouw Oudenaarde', type: 'building', sort: 40, children: [
+        { code: 'OUD-DIENSTGEBOUW-LAAGSPANNING', name: 'Laagspanningslokaal', type: 'technical_space', abbreviation: 'LS' },
+        { code: 'OUD-DIENSTGEBOUW-SCADA', name: 'SCADA lokaal', type: 'technical_space' }
+      ] },
+      { code: 'OUD-KABELGANG-ZUID', name: 'Kabelgang zuid', type: 'cable_route', sort: 50 }
+    ] },
+    { code: 'KERKHOVE', name: 'Kerkhove', type: 'complex', complexCode: 'KERK', complexName: 'Stuwsluiscomplex Kerkhove', abbreviation: 'KERK', sourcePage: 73, confidence: 'explicit', children: [
+      { code: 'KERK-SLUIS', name: 'Sluis Kerkhove', type: 'asset_zone', sort: 10, children: [
+        { code: 'KERK-SLUIS-BOVENHOOFD', name: 'Bovenhoofd', type: 'structure_part' },
+        { code: 'KERK-SLUIS-BENEDENHOOFD', name: 'Benedenhoofd', type: 'structure_part' },
+        { code: 'KERK-SLUIS-KOLK', name: 'Kolkomgeving', type: 'equipment_zone' }
+      ] },
+      { code: 'KERK-STUW', name: 'Stuw Kerkhove', type: 'asset_zone', sort: 20, children: [
+        { code: 'KERK-STUW-LINKEROEVER', name: 'Linkeroever', type: 'bank' },
+        { code: 'KERK-STUW-RECHTEROEVER', name: 'Rechteroever', type: 'bank' },
+        { code: 'KERK-STUW-KIOSK', name: 'Stuwkiosk', type: 'building', confidence: 'inferred' }
+      ] },
+      { code: 'KERK-VISPASSAGE', name: 'Vispassage Kerkhove', type: 'asset_zone', sort: 30 },
+      { code: 'KERK-DIENSTGEBOUW', name: 'Dienstgebouw Kerkhove', type: 'building', sort: 40, children: [
+        { code: 'KERK-DIENSTGEBOUW-TECH', name: 'Technische ruimte', type: 'technical_space' },
+        { code: 'KERK-DIENSTGEBOUW-ARCHIEF', name: 'Archieflokaal', type: 'room', confidence: 'derived' }
+      ] },
+      { code: 'KERK-KABELGANG-WEST', name: 'Kabelgang west', type: 'cable_route', sort: 50 }
+    ] }
+  ] }
+];
 
 function choice(values, index, salt = 0) {
   return values[(index + salt) % values.length];
@@ -47,6 +116,109 @@ async function reset() {
     TRUNCATE audit_events, documents, time_entries, tickets, projects, customers
     RESTART IDENTITY CASCADE
   `);
+}
+
+async function ensureLocationSchema() {
+  await client.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS location_type (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      code TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT
+    )
+  `);
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS location (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      parent_id UUID REFERENCES location(id) ON DELETE RESTRICT,
+      type_id UUID REFERENCES location_type(id),
+      code TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      complex_code TEXT,
+      complex_name TEXT,
+      abbreviation TEXT,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      source TEXT,
+      source_page INTEGER,
+      source_section TEXT,
+      confidence TEXT NOT NULL DEFAULT 'derived',
+      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      CONSTRAINT location_confidence_check CHECK (confidence IN ('explicit', 'derived', 'inferred'))
+    )
+  `);
+  await client.query('CREATE INDEX IF NOT EXISTS idx_location_parent_id ON location(parent_id)');
+  await client.query('CREATE INDEX IF NOT EXISTS idx_location_complex_code ON location(complex_code)');
+  await client.query('CREATE INDEX IF NOT EXISTS idx_location_metadata ON location USING gin(metadata)');
+}
+
+async function seedLocationNode(node, parentId = null, inheritedComplex = {}, index = 0) {
+  const typeResult = await client.query('SELECT id FROM location_type WHERE code = $1', [node.type]);
+  const complexCode = node.complexCode ?? inheritedComplex.complexCode ?? null;
+  const complexName = node.complexName ?? inheritedComplex.complexName ?? null;
+  const result = await client.query(
+    `INSERT INTO location (
+       parent_id, type_id, code, name, display_name, complex_code, complex_name,
+       abbreviation, sort_order, source, source_page, source_section, confidence, metadata, updated_at
+     )
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,now())
+     ON CONFLICT (code) DO UPDATE SET
+       parent_id = EXCLUDED.parent_id,
+       type_id = EXCLUDED.type_id,
+       name = EXCLUDED.name,
+       display_name = EXCLUDED.display_name,
+       complex_code = EXCLUDED.complex_code,
+       complex_name = EXCLUDED.complex_name,
+       abbreviation = EXCLUDED.abbreviation,
+       sort_order = EXCLUDED.sort_order,
+       source = EXCLUDED.source,
+       source_page = EXCLUDED.source_page,
+       source_section = EXCLUDED.source_section,
+       confidence = EXCLUDED.confidence,
+       metadata = EXCLUDED.metadata,
+       updated_at = now()
+     RETURNING id`,
+    [
+      parentId,
+      typeResult.rows[0].id,
+      node.code,
+      node.name,
+      `${node.code} - ${node.name}`,
+      complexCode,
+      complexName,
+      node.abbreviation ?? null,
+      node.sort ?? index,
+      'Bestek locatie-extract',
+      node.sourcePage ?? null,
+      node.sourceSection ?? null,
+      node.confidence ?? 'derived',
+      json({ seed: true, sourceHint: 'reviewable JS seed tree' })
+    ]
+  );
+
+  const nextComplex = { complexCode, complexName };
+  for (const [childIndex, child] of (node.children ?? []).entries()) {
+    await seedLocationNode(child, result.rows[0].id, nextComplex, childIndex + 1);
+  }
+}
+
+async function seedLocations() {
+  await ensureLocationSchema();
+  for (const [code, name] of locationTypes) {
+    await client.query(
+      `INSERT INTO location_type (code, name)
+       VALUES ($1,$2)
+       ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name`,
+      [code, name]
+    );
+  }
+
+  for (const node of locationSeed) {
+    await seedLocationNode(node);
+  }
 }
 
 async function seedCustomers() {
@@ -214,6 +386,7 @@ async function main() {
   await seedTimeEntries(ticketIds, projectIds, customerIds);
   await seedDocuments(projectIds);
   await seedAuditEvents();
+  await seedLocations();
   await client.query('ANALYZE');
   await client.end();
   console.log(`Seed complete: ${ROWS} time entries plus related data.`);

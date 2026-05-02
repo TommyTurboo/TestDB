@@ -1,0 +1,112 @@
+body {
+  margin: 0;
+}
+
+mark {
+  background: #ffda6a;
+  border-radius: 4px;
+  padding: 0 2px;
+}
+
+.app-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(192, 99, 43, 0.18), transparent 32rem),
+    linear-gradient(135deg, #f4f0e8 0%, #eaf0ec 100%);
+}
+
+.topbar {
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px 32px;
+}
+
+.workspace {
+  padding: 0 32px 32px;
+  align-items: stretch;
+}
+
+.main-panel {
+  width: calc(100vw - 500px);
+  min-height: calc(100vh - 128px);
+  overflow: hidden;
+  border: 1px solid rgba(23, 78, 79, 0.14);
+  transition: width 180ms ease;
+}
+
+.main-panel-full {
+  width: calc(100vw - 64px);
+}
+
+.query-bar {
+  padding: 18px;
+  border-bottom: 1px solid rgba(23, 78, 79, 0.12);
+}
+
+.grid-box {
+  height: calc(100vh - 270px);
+  width: 100%;
+}
+
+.footer-bar {
+  padding: 14px 18px;
+  border-top: 1px solid rgba(23, 78, 79, 0.12);
+}
+
+.control-drawer {
+  position: static;
+  width: 420px;
+  height: calc(100vh - 96px);
+  border: 1px solid rgba(23, 78, 79, 0.14);
+  border-radius: 18px;
+  overflow: hidden;
+  background: #fffdf8;
+}
+
+.drawer-content {
+  padding: 20px;
+  height: 100%;
+  overflow: auto;
+}
+
+.column-item {
+  border: 1px solid rgba(23, 78, 79, 0.12);
+  border-radius: 12px;
+  margin-bottom: 8px;
+  background: white;
+}
+
+.pin-cycle-button {
+  border: 1px solid rgba(23, 78, 79, 0.16);
+  background: rgba(23, 78, 79, 0.04);
+}
+
+.pin-none {
+  color: rgba(23, 78, 79, 0.38);
+}
+
+.pin-left {
+  transform: rotate(-45deg);
+}
+
+.pin-right {
+  transform: rotate(45deg);
+}
+
+.facet-list {
+  border: 1px solid rgba(23, 78, 79, 0.12);
+  border-radius: 12px;
+  max-height: 58vh;
+  overflow: auto;
+}
+
+.saved-view {
+  padding: 12px;
+}
+
+.ag-theme-quartz {
+  --ag-font-family: Aptos, Segoe UI, sans-serif;
+  --ag-header-background-color: #e7eee8;
+  --ag-odd-row-background-color: #fffaf0;
+  --ag-selected-row-background-color: rgba(192, 99, 43, 0.12);
+}

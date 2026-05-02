@@ -1,0 +1,52 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: tablelab
+      POSTGRES_USER: tablelab
+      POSTGRES_PASSWORD: tablelab
+    ports:
+      - "5436:5432"
+    volumes:
+      - tablelab_pg:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tablelab -d tablelab"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: .
+    command: npm run dev:api
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: tablelab
+      PGUSER: tablelab
+      PGPASSWORD: tablelab
+      PORT: 4174
+    ports:
+      - "4174:4174"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build: .
+    command: npm run dev:web
+    environment:
+      VITE_API_BASE: http://localhost:4174
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      - api
+
+volumes:
+  tablelab_pg:

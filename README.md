@@ -22,3 +22,16 @@ Open daarna `http://localhost:5173`.
 ## Lokaal zonder Docker
 
 Zet eerst PostgreSQL klaar en configureer `.env` of omgevingsvariabelen op basis van `.env.example`.
+
+## Bundle-grootte controleren
+
+De Vite build toont de gegenereerde assets en chunk-groottes. Draai na wijzigingen:
+
+```powershell
+npm run build
+npm run bundle:size
+```
+
+`npm run bundle:size` leest de bestaande bestanden in `dist/assets` en vat de JavaScript chunks samen met raw en gzip-groottes. De check is informatief en faalt de build niet; gebruik hem in reviews om te zien of de initiele `index-*.js` chunk en de lazy `LocationsPage-*.js` chunk logisch blijven.
+
+Referentie voor de lazy-loading refactor: de oude single-entry JavaScript bundle was ongeveer 1,65 MB. Na de refactor hoort de initiele `index-*.js` onder die baseline te blijven en hoort locatie-specifieke code zichtbaar te zijn als aparte `LocationsPage-*.js` lazy chunk.

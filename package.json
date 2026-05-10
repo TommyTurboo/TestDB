@@ -9,6 +9,9 @@
     "dev:api": "node server/index.js",
     "dev:web": "vite --host 0.0.0.0",
     "build": "vite build",
+    "bundle:size": "node scripts/report_bundle_size.js",
+    "test:unit": "node --test src/locationDomain.test.js",
+    "test": "npm run test:unit",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {

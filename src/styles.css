@@ -32,8 +32,35 @@ mark {
   padding: 24px 32px;
 }
 
+.app-shell-locations .topbar {
+  min-height: 48px;
+  padding: 8px 24px;
+  gap: 14px;
+}
+
+.app-shell-locations .topbar .MuiTypography-h4 {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
+.app-shell-locations .topbar-subtitle {
+  display: none;
+}
+
 .app-tabs {
   min-height: 40px;
+}
+
+.app-shell-locations .app-tabs {
+  min-height: 32px;
+}
+
+.app-shell-locations .app-tabs .MuiTab-root {
+  min-height: 32px;
+  padding: 6px 12px;
+  font-size: 12px;
 }
 
 .stats-chips {
@@ -41,6 +68,17 @@ mark {
   overflow: hidden;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.app-shell-locations .stats-chips {
+  max-width: 56vw;
+  gap: 5px;
+}
+
+.app-shell-locations .stats-chips .MuiChip-root {
+  height: 24px;
+  border-radius: 999px;
+  font-size: 11px;
 }
 
 .workspace {
@@ -206,6 +244,15 @@ mark {
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.14);
 }
 
+.column-filter-panel {
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  padding: 12px;
+  border: 1px solid rgba(31, 41, 51, 0.12);
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.14);
+}
+
 .column-value-list {
   max-height: 260px;
   overflow: auto;
@@ -232,6 +279,43 @@ mark {
   padding: 10px;
 }
 
+.cell-value-editor-popover {
+  width: 300px;
+  max-width: calc(100vw - 32px);
+  padding: 12px;
+  border: 1px solid rgba(31, 41, 51, 0.12);
+  border-radius: 8px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.14);
+}
+
+.cell-value-editor-popover .MuiTypography-subtitle2 {
+  color: #111827;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.cell-value-editor-list {
+  max-height: 240px;
+  overflow: auto;
+  border: 1px solid rgba(31, 41, 51, 0.1);
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.cell-value-editor-list .MuiListItemButton-root {
+  min-height: 34px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+.cell-value-editor-list .MuiListItemText-primary {
+  font-size: 12.5px;
+}
+
+.cell-value-editor-list .MuiListItemText-secondary {
+  font-size: 10.5px;
+}
+
 .saved-view {
   padding: 12px;
 }
@@ -246,7 +330,11 @@ mark {
   flex-direction: column;
 }
 
-.locations-hero,
+.app-shell-locations .locations-page {
+  padding: 0 30px 16px;
+}
+
+.locations-toolbar,
 .locations-table-card,
 .locations-tree-card,
 .locations-detail-card {
@@ -256,10 +344,36 @@ mark {
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
 }
 
-.locations-hero {
-  padding: 16px 18px;
+.locations-toolbar {
+  padding: 8px 12px;
   background: #ffffff;
   flex: 0 0 auto;
+}
+
+.locations-toolbar .MuiTypography-h6 {
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.locations-toolbar .MuiChip-root {
+  height: 22px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.locations-toolbar .MuiButton-root {
+  min-height: 28px;
+  padding: 3px 9px;
+  border-radius: 6px;
+}
+
+.locations-toolbar .MuiIconButton-root {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
 }
 
 .locations-workspace {
@@ -371,8 +485,154 @@ mark {
   width: 100%;
 }
 
+.locations-table-scroll {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  flex-direction: column;
+}
+
+.locations-table-scroll .locations-grid-box {
+  flex: 1 0 360px;
+  min-height: 300px;
+}
+
+.locations-table-scroll.has-filter-result-sets .locations-grid-box {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
 .locations-table-card .footer-bar {
   flex: 0 0 auto;
+}
+
+.grid-height-divider {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 16px;
+  width: 100%;
+  min-height: 16px;
+  background: #ffffff;
+  cursor: row-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.grid-height-divider-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: rgba(31, 41, 51, 0.22);
+}
+
+.grid-height-divider-handle {
+  position: relative;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  background: #174e4f;
+  box-shadow: 0 0 0 1px rgba(23, 78, 79, 0.28);
+}
+
+.grid-height-divider:hover .grid-height-divider-line,
+body.is-grid-height-resizing .grid-height-divider-line {
+  height: 2px;
+  background: rgba(23, 78, 79, 0.42);
+}
+
+.grid-height-divider:hover .grid-height-divider-handle,
+body.is-grid-height-resizing .grid-height-divider-handle {
+  background: #c0632b;
+  box-shadow: 0 0 0 3px rgba(192, 99, 43, 0.14);
+}
+
+body.is-grid-height-resizing {
+  cursor: row-resize;
+  user-select: none;
+}
+
+.filter-result-sets {
+  flex: 0 0 auto;
+  padding: 0;
+  background: #ffffff;
+}
+
+.filter-result-set-panel {
+  background: #ffffff;
+}
+
+.filter-result-set-panel:first-child {
+  border-top: 0;
+}
+
+.filter-result-set-bar {
+  min-height: 30px;
+  padding: 4px 12px;
+  background: #fffdf8;
+}
+
+.filter-result-set-panel .MuiTypography-subtitle2 {
+  color: #1f2937;
+  font-size: 12.5px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.filter-result-count {
+  flex: 0 0 auto;
+}
+
+.filter-result-actions .MuiButton-root {
+  min-width: 0;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: 11.5px;
+}
+
+.filter-context-chips {
+  padding: 0 12px 6px;
+}
+
+.filter-context-chips .MuiChip-root {
+  max-width: 100%;
+  height: 22px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.filter-result-grid {
+  width: 100%;
+  border-top: 1px solid rgba(31, 41, 51, 0.08);
+  overflow: hidden;
+}
+
+.filter-result-grid.ag-theme-quartz {
+  --ag-header-background-color: #f8fafc;
+  --ag-header-foreground-color: #334155;
+  --ag-odd-row-background-color: #ffffff;
+  --ag-row-hover-color: #f1f5f9;
+  --ag-selected-row-background-color: #eff6ff;
+  --ag-border-color: rgba(31, 41, 51, 0.1);
+  --ag-row-border-color: rgba(31, 41, 51, 0.07);
+}
+
+.filter-result-grid .ag-header-cell-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #475569;
+}
+
+.filter-result-grid .ag-row {
+  font-size: 12px;
 }
 
 .arborist-box {
@@ -778,6 +1038,85 @@ mark {
   color: #475569;
 }
 
+.location-column-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+}
+
+.location-column-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+  padding: 0;
+  border: 0;
+  color: #475569;
+  background: transparent;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-align: left;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.location-column-title span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.location-column-sort {
+  flex: 0 0 auto;
+  color: #2563eb;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.location-header-pin-button,
+.location-header-filter-button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: #64748b;
+  background: transparent;
+  cursor: pointer;
+}
+
+.location-header-pin-button {
+  font-size: 14px;
+}
+
+.location-header-pin-button:hover,
+.location-header-filter-button:hover {
+  color: #174e4f;
+  background: #eef4f4;
+  border-color: rgba(23, 78, 79, 0.16);
+}
+
+.location-header-pin-button.is-active,
+.location-header-filter-button.is-active {
+  color: #ffffff;
+  background: #174e4f;
+  border-color: #174e4f;
+}
+
+.location-header-pin-button.is-active .pin-left {
+  color: inherit;
+}
+
 .locations-grid-box .ag-row {
   font-size: 12.5px;
 }
@@ -789,6 +1128,21 @@ mark {
 
 .locations-grid-box .ag-row-hover:not(.location-row-selected) {
   background: #f8fafc !important;
+}
+
+.locations-grid-box .ag-cell.location-cell-multi-selected {
+  background: rgba(220, 38, 38, 0.08) !important;
+  box-shadow: inset 0 0 0 2px rgba(220, 38, 38, 0.85);
+}
+
+.locations-grid-box .ag-cell.location-cell-multi-selected.ag-cell-focus {
+  box-shadow: inset 0 0 0 3px #dc2626;
+}
+
+.locations-grid-box.is-cell-drag-selecting,
+.locations-grid-box.is-cell-drag-selecting .ag-cell {
+  cursor: cell;
+  user-select: none;
 }
 
 @media (max-width: 900px) {

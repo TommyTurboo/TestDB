@@ -5,12 +5,15 @@ import {
   buildNextLocationRow,
   defaultLocationColumns,
   filterTreeNodes,
+  getLocationColumnConfig,
   matchesColumnValueFilters,
   matchesLocationQuery,
   parseClipboardTable,
+  validateLocationCellValue,
   validateClipboardValue,
   wouldCreateLocationCycle
 } from './locationDomain.js';
+import { EDIT_TYPES, getTableInteractionConfig, normalizeTableConfig } from './tableConfig.js';
 
 const rows = [
   { id: 'root', code: 'ROOT', name: 'Root', type: 'Project', parentId: null, typeCode: 'project', confidence: 'explicit' },
@@ -27,6 +30,43 @@ test('defaultLocationColumns keeps stable visibility, ordering and code pin', ()
   assert.equal(columns.find((column) => column.field === 'metadata').visible, false);
   assert.equal(columns.find((column) => column.field === 'abbreviation').visible, false);
   assert.equal(columns.find((column) => column.field === 'name').visible, true);
+});
+
+test('location table config exposes v1 edit types and validates invalid configs', () => {
+  const config = getTableInteractionConfig('locations');
+
+  assert.equal(getLocationColumnConfig('code').editType, EDIT_TYPES.TEXT);
+  assert.equal(getLocationColumnConfig('confidence').editType, EDIT_TYPES.SINGLE_SELECT);
+  assert.equal(getLocationColumnConfig('type').editType, EDIT_TYPES.RELATION_SELECT);
+  assert.equal(getLocationColumnConfig('childCount').editType, EDIT_TYPES.READONLY);
+  assert.throws(
+    () => normalizeTableConfig({ table: 'bad', columns: [{ field: 'x', editType: 'customMagic' }] }),
+    /Unknown edit type/
+  );
+  assert.equal(config.saveMode, 'cellSave');
+});
+
+test('validateLocationCellValue blocks read-only and invalid values', () => {
+  assert.deepEqual(validateLocationCellValue('name', ''), {
+    valid: false,
+    field: 'name',
+    message: 'Naam is verplicht.'
+  });
+  assert.deepEqual(validateLocationCellValue('confidence', 'manual'), {
+    valid: false,
+    field: 'confidence',
+    message: 'Confidence moet een toegestane waarde zijn.'
+  });
+  assert.deepEqual(validateLocationCellValue('childCount', 4), {
+    valid: false,
+    field: 'childCount',
+    message: 'Wordt afgeleid uit de locatieboom.'
+  });
+  assert.deepEqual(validateLocationCellValue('sourcePage', '12'), {
+    valid: true,
+    field: 'sourcePage',
+    value: 12
+  });
 });
 
 test('wouldCreateLocationCycle blocks moving a node below itself or a descendant', () => {

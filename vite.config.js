@@ -7,7 +7,7 @@ export default defineConfig({
     port: 5173,
     allowedHosts: ['localhost', '127.0.0.1', 'host.docker.internal'],
     proxy: {
-      '/api': 'http://localhost:4174'
+      '/api': process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:4174'
     }
   }
 });

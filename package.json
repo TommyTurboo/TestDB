@@ -10,7 +10,7 @@
     "dev:web": "vite --host 0.0.0.0",
     "build": "vite build",
     "bundle:size": "node scripts/report_bundle_size.js",
-    "test:unit": "node --test src/locationDomain.test.js",
+    "test:unit": "node --test src/locationDomain.test.js server/schemaCatalog.test.js server/tableViewDrafts.test.js",
     "test": "npm run test:unit",
     "preview": "vite preview --host 0.0.0.0"
   },
@@ -25,10 +25,12 @@
     "ag-grid-community": "^32.3.4",
     "ag-grid-react": "^32.3.4",
     "concurrently": "^9.2.1",
+    "frappe-gantt": "^1.2.2",
     "pg": "^8.13.3",
     "react": "^19.1.0",
     "react-arborist": "^3.5.0",
     "react-dom": "^19.1.0",
+    "vis-timeline": "^8.5.1",
     "vite": "^6.3.4"
   },
   "devDependencies": {

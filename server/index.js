@@ -2,6 +2,18 @@ import http from 'node:http';
 import { URL } from 'node:url';
 import { query } from './db.js';
 import { getColumn, getTableConfig, tableConfigs } from './schema.js';
+import { loadSchemaCatalog } from './schemaCatalog.js';
+import {
+  createTableViewDraft,
+  getTableViewDraft,
+  listTableViewDrafts,
+  updateTableViewDraft
+} from './tableViewDrafts.js';
+import {
+  EDIT_TYPES,
+  getTableInteractionConfig,
+  validateCellValue
+} from '../src/tableConfig.js';
 
 const PORT = Number(process.env.PORT ?? 4174);
 const MAX_LIMIT = 100000;
@@ -147,6 +159,111 @@ async function facets(url) {
   return { values: result.rows, timing: { facetsMs: result.durationMs } };
 }
 
+const tableCellUpdateTargets = {
+  planning_tasks: {
+    idColumn: 'id',
+    tableName: 'planning_tasks',
+    fields: {
+      code: { columnName: 'code' },
+      name: { columnName: 'name' },
+      task_kind: { columnName: 'task_kind' },
+      status: { columnName: 'status' },
+      progress: { columnName: 'progress' },
+      start_date: { columnName: 'start_date' },
+      end_date: { columnName: 'end_date' },
+      work_package_code: {
+        columnName: 'work_package_id',
+        resolve: async (value) => {
+          if (value == null || value === '') return null;
+          const result = await query('SELECT id FROM work_packages WHERE code = $1', [value]);
+          if (result.rows.length) return result.rows[0].id;
+          const error = new Error(`Unknown work package: ${value}`);
+          error.statusCode = 400;
+          error.fieldErrors = { work_package_code: 'Kies een bestaande work package.' };
+          throw error;
+        }
+      },
+      location_code: {
+        columnName: 'location_id',
+        resolve: async (value) => {
+          if (value == null || value === '') return null;
+          const result = await query('SELECT id FROM location WHERE code = $1', [value]);
+          if (result.rows.length) return result.rows[0].id;
+          const error = new Error(`Unknown location: ${value}`);
+          error.statusCode = 400;
+          error.fieldErrors = { location_code: 'Kies een bestaande locatie.' };
+          throw error;
+        }
+      },
+      constraint_type: { columnName: 'constraint_type' },
+      constraint_date: { columnName: 'constraint_date' },
+      notes: { columnName: 'notes' }
+    }
+  }
+};
+
+async function updateConfiguredCell(request) {
+  const body = await readBody(request);
+  const table = String(body.table ?? '');
+  const field = String(body.field ?? '');
+  const target = tableCellUpdateTargets[table];
+  const config = getTableInteractionConfig(table);
+  if (!target || !config) {
+    const error = new Error(`Cell updates are not configured for table: ${table}`);
+    error.statusCode = 400;
+    throw error;
+  }
+  const fieldTarget = target.fields[field];
+  if (!fieldTarget) {
+    const error = new Error(`Column is not writable: ${field}`);
+    error.statusCode = 400;
+    error.fieldErrors = { [field]: 'Deze kolom is niet schrijfbaar.' };
+    throw error;
+  }
+  const validation = validateCellValue(config, field, body.value);
+  if (!validation.valid) {
+    const error = new Error('Cell update contains invalid value');
+    error.statusCode = 400;
+    error.fieldErrors = { [field]: validation.message };
+    throw error;
+  }
+
+  const writeValue = fieldTarget.resolve ? await fieldTarget.resolve(validation.value) : validation.value;
+  const before = await query(`SELECT ${fieldTarget.columnName} FROM ${target.tableName} WHERE ${target.idColumn} = $1`, [body.id]);
+  if (before.rows.length === 0) {
+    const error = new Error('Row not found');
+    error.statusCode = 404;
+    throw error;
+  }
+  const result = await query(
+    `UPDATE ${target.tableName}
+     SET ${fieldTarget.columnName} = $1, updated_at = now()
+     WHERE ${target.idColumn} = $2
+     RETURNING *`,
+    [writeValue, body.id]
+  );
+  await auditCellChanges({
+    table,
+    recordId: body.id,
+    actor: request.headers['x-actor'] ?? 'unknown',
+    changes: [{
+      field,
+      oldValue: before.rows[0][fieldTarget.columnName] ?? null,
+      newValue: writeValue ?? null,
+      displayValue: validation.value ?? null
+    }]
+  });
+  return { row: result.rows[0] };
+}
+
+async function tableViewDraftPayload(request) {
+  const [body, catalog] = await Promise.all([
+    readBody(request),
+    loadSchemaCatalog(query, tableConfigs)
+  ]);
+  return { body, catalog };
+}
+
 async function stats() {
   const result = await query(`
     SELECT 'customers' AS table_name, count(*)::int AS total FROM customers
@@ -156,8 +273,408 @@ async function stats() {
     UNION ALL SELECT 'documents', count(*)::int FROM documents
     UNION ALL SELECT 'audit_events', count(*)::int FROM audit_events
     UNION ALL SELECT 'location', count(*)::int FROM location
+    UNION ALL SELECT 'planning_tasks', count(*)::int FROM planning_tasks
+    UNION ALL SELECT 'planning_dependencies', count(*)::int FROM planning_dependencies
+    UNION ALL SELECT 'planning_resources', count(*)::int FROM planning_resources
+    UNION ALL SELECT 'planning_equipment', count(*)::int FROM planning_equipment
   `);
   return { tables: result.rows };
+}
+
+function dateOnly(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value).slice(0, 10);
+}
+
+function mapPlanningTask(row) {
+  return {
+    id: Number(row.id),
+    projectId: Number(row.project_id),
+    projectCode: row.project_code,
+    workPackageId: row.work_package_id == null ? null : Number(row.work_package_id),
+    workPackageCode: row.work_package_code,
+    workPackageName: row.work_package_name,
+    locationId: row.location_id,
+    locationCode: row.location_code,
+    locationName: row.location_name,
+    code: row.code,
+    wbsCode: row.wbs_code,
+    name: row.name,
+    taskKind: row.task_kind,
+    status: row.status,
+    progress: Number(row.progress ?? 0),
+    startDate: dateOnly(row.start_date),
+    endDate: dateOnly(row.end_date),
+    constraintType: row.constraint_type,
+    constraintDate: dateOnly(row.constraint_date),
+    discipline: row.discipline,
+    notes: row.notes,
+    metadata: row.metadata ?? {},
+    resources: [],
+    equipment: [],
+    documents: [],
+    predecessors: [],
+    successors: []
+  };
+}
+
+function mapWorkPackage(row) {
+  return {
+    id: Number(row.id),
+    projectId: Number(row.project_id),
+    projectCode: row.project_code,
+    parentId: row.parent_id == null ? null : Number(row.parent_id),
+    parentCode: row.parent_code,
+    code: row.code,
+    name: row.name,
+    discipline: row.discipline,
+    sortOrder: Number(row.sort_order ?? 0),
+    metadata: row.metadata ?? {}
+  };
+}
+
+function mapPlanningResource(row) {
+  return {
+    id: Number(row.id),
+    code: row.code,
+    name: row.name,
+    resourceType: row.resource_type,
+    discipline: row.discipline,
+    capacityHoursPerDay: Number(row.capacity_hours_per_day ?? 0),
+    calendar: row.calendar ?? {}
+  };
+}
+
+function mapPlanningEquipment(row) {
+  return {
+    id: Number(row.id),
+    code: row.code,
+    name: row.name,
+    equipmentType: row.equipment_type,
+    status: row.status,
+    metadata: row.metadata ?? {}
+  };
+}
+
+function mapPlanningDependency(row) {
+  return {
+    id: Number(row.id),
+    predecessorId: Number(row.predecessor_id),
+    predecessorCode: row.predecessor_code,
+    successorId: Number(row.successor_id),
+    successorCode: row.successor_code,
+    dependencyType: row.dependency_type,
+    lagDays: Number(row.lag_days ?? 0),
+    metadata: row.metadata ?? {}
+  };
+}
+
+async function planningTasks() {
+  const result = await query(`
+    SELECT
+      pt.*,
+      p.code AS project_code,
+      wp.code AS work_package_code,
+      wp.name AS work_package_name,
+      l.code AS location_code,
+      l.display_name AS location_name
+    FROM planning_tasks pt
+    JOIN projects p ON p.id = pt.project_id
+    LEFT JOIN work_packages wp ON wp.id = pt.work_package_id
+    LEFT JOIN location l ON l.id = pt.location_id
+    ORDER BY pt.start_date ASC, pt.end_date ASC, pt.wbs_code ASC, pt.code ASC
+  `);
+  return { tasks: result.rows.map(mapPlanningTask), timing: { tasksMs: result.durationMs } };
+}
+
+async function planningDependencies() {
+  const result = await query(`
+    SELECT
+      pd.*,
+      predecessor.code AS predecessor_code,
+      successor.code AS successor_code
+    FROM planning_dependencies pd
+    JOIN planning_tasks predecessor ON predecessor.id = pd.predecessor_id
+    JOIN planning_tasks successor ON successor.id = pd.successor_id
+    ORDER BY predecessor.start_date ASC, predecessor.code ASC, successor.start_date ASC, successor.code ASC
+  `);
+  return { dependencies: result.rows.map(mapPlanningDependency), timing: { dependenciesMs: result.durationMs } };
+}
+
+async function planningResources() {
+  const result = await query('SELECT * FROM planning_resources ORDER BY discipline ASC, code ASC');
+  return { resources: result.rows.map(mapPlanningResource), timing: { resourcesMs: result.durationMs } };
+}
+
+async function planningEquipment() {
+  const result = await query('SELECT * FROM planning_equipment ORDER BY equipment_type ASC, code ASC');
+  return { equipment: result.rows.map(mapPlanningEquipment), timing: { equipmentMs: result.durationMs } };
+}
+
+async function planningWorkbench() {
+  const [
+    tasksResult,
+    dependenciesResult,
+    resourcesResult,
+    equipmentResult,
+    workPackagesResult,
+    taskResourcesResult,
+    taskEquipmentResult,
+    taskDocumentsResult
+  ] = await Promise.all([
+    query(`
+      SELECT
+        pt.*,
+        p.code AS project_code,
+        wp.code AS work_package_code,
+        wp.name AS work_package_name,
+        l.code AS location_code,
+        l.display_name AS location_name
+      FROM planning_tasks pt
+      JOIN projects p ON p.id = pt.project_id
+      LEFT JOIN work_packages wp ON wp.id = pt.work_package_id
+      LEFT JOIN location l ON l.id = pt.location_id
+      ORDER BY pt.start_date ASC, pt.end_date ASC, pt.wbs_code ASC, pt.code ASC
+    `),
+    query(`
+      SELECT
+        pd.*,
+        predecessor.code AS predecessor_code,
+        successor.code AS successor_code
+      FROM planning_dependencies pd
+      JOIN planning_tasks predecessor ON predecessor.id = pd.predecessor_id
+      JOIN planning_tasks successor ON successor.id = pd.successor_id
+      ORDER BY predecessor.start_date ASC, predecessor.code ASC, successor.start_date ASC, successor.code ASC
+    `),
+    query('SELECT * FROM planning_resources ORDER BY discipline ASC, code ASC'),
+    query('SELECT * FROM planning_equipment ORDER BY equipment_type ASC, code ASC'),
+    query(`
+      SELECT wp.*, p.code AS project_code, parent.code AS parent_code
+      FROM work_packages wp
+      JOIN projects p ON p.id = wp.project_id
+      LEFT JOIN work_packages parent ON parent.id = wp.parent_id
+      ORDER BY wp.sort_order ASC, wp.code ASC
+    `),
+    query(`
+      SELECT
+        ptr.task_id,
+        ptr.resource_id,
+        ptr.allocation_percent,
+        ptr.role_on_task,
+        pt.code AS task_code,
+        pr.code AS resource_code,
+        pr.name AS resource_name
+      FROM planning_task_resources ptr
+      JOIN planning_tasks pt ON pt.id = ptr.task_id
+      JOIN planning_resources pr ON pr.id = ptr.resource_id
+      ORDER BY pt.start_date ASC, pt.code ASC, pr.code ASC
+    `),
+    query(`
+      SELECT
+        pte.task_id,
+        pte.equipment_id,
+        pte.usage_note,
+        pt.code AS task_code,
+        pe.code AS equipment_code,
+        pe.name AS equipment_name
+      FROM planning_task_equipment pte
+      JOIN planning_tasks pt ON pt.id = pte.task_id
+      JOIN planning_equipment pe ON pe.id = pte.equipment_id
+      ORDER BY pt.start_date ASC, pt.code ASC, pe.code ASC
+    `),
+    query(`
+      SELECT
+        ptd.task_id,
+        ptd.document_id,
+        ptd.link_type,
+        pt.code AS task_code,
+        d.title AS document_title,
+        d.doc_type
+      FROM planning_task_documents ptd
+      JOIN planning_tasks pt ON pt.id = ptd.task_id
+      JOIN documents d ON d.id = ptd.document_id
+      ORDER BY pt.start_date ASC, pt.code ASC, d.title ASC
+    `)
+  ]);
+
+  const tasks = tasksResult.rows.map(mapPlanningTask);
+  const dependencies = dependenciesResult.rows.map(mapPlanningDependency);
+  const resources = resourcesResult.rows.map(mapPlanningResource);
+  const equipment = equipmentResult.rows.map(mapPlanningEquipment);
+  const workPackages = workPackagesResult.rows.map(mapWorkPackage);
+  const tasksById = new Map(tasks.map((task) => [task.id, task]));
+  const tasksByCode = new Map(tasks.map((task) => [task.code, task]));
+
+  const taskResources = taskResourcesResult.rows.map((row) => ({
+    taskId: Number(row.task_id),
+    taskCode: row.task_code,
+    resourceId: Number(row.resource_id),
+    resourceCode: row.resource_code,
+    resourceName: row.resource_name,
+    allocationPercent: Number(row.allocation_percent ?? 0),
+    roleOnTask: row.role_on_task
+  }));
+  taskResources.forEach((item) => tasksById.get(item.taskId)?.resources.push(item));
+
+  const taskEquipment = taskEquipmentResult.rows.map((row) => ({
+    taskId: Number(row.task_id),
+    taskCode: row.task_code,
+    equipmentId: Number(row.equipment_id),
+    equipmentCode: row.equipment_code,
+    equipmentName: row.equipment_name,
+    usageNote: row.usage_note
+  }));
+  taskEquipment.forEach((item) => tasksById.get(item.taskId)?.equipment.push(item));
+
+  const taskDocuments = taskDocumentsResult.rows.map((row) => ({
+    taskId: Number(row.task_id),
+    taskCode: row.task_code,
+    documentId: Number(row.document_id),
+    documentTitle: row.document_title,
+    docType: row.doc_type,
+    linkType: row.link_type
+  }));
+  taskDocuments.forEach((item) => tasksById.get(item.taskId)?.documents.push(item));
+
+  dependencies.forEach((dependency) => {
+    tasksById.get(dependency.successorId)?.predecessors.push(dependency);
+    tasksById.get(dependency.predecessorId)?.successors.push(dependency);
+  });
+
+  const predecessorCodesBySuccessor = new Map();
+  dependencies.forEach((dependency) => {
+    if (!tasksByCode.has(dependency.predecessorCode) || !tasksByCode.has(dependency.successorCode)) return;
+    const codes = predecessorCodesBySuccessor.get(dependency.successorCode) ?? [];
+    codes.push(dependency.predecessorCode);
+    predecessorCodesBySuccessor.set(dependency.successorCode, codes);
+  });
+
+  const frappeTasks = tasks.map((task) => ({
+    id: task.code,
+    name: `${task.wbsCode} ${task.name}`,
+    start: task.startDate,
+    end: task.endDate,
+    progress: task.progress,
+    dependencies: (predecessorCodesBySuccessor.get(task.code) ?? []).join(','),
+    custom_class: `planning-${task.taskKind}-status-${task.status}`,
+    taskKind: task.taskKind,
+    status: task.status,
+    workPackageCode: task.workPackageCode,
+    resourceCodes: task.resources.map((resource) => resource.resourceCode),
+    equipmentCodes: task.equipment.map((item) => item.equipmentCode)
+  }));
+
+  const timelineItemForTask = (task, group, idSuffix = '') => ({
+    id: `${group.id}:${task.id}${idSuffix}`,
+    group: group.id,
+    content: `${task.wbsCode} ${task.name}`,
+    title: `${task.code} - ${task.name}`,
+    start: task.startDate,
+    end: task.taskKind === 'milestone' ? undefined : task.endDate,
+    type: task.taskKind === 'milestone' ? 'point' : 'range',
+    className: `planning-${task.taskKind} status-${task.status}`,
+    taskId: task.id,
+    taskCode: task.code,
+    taskKind: task.taskKind,
+    status: task.status
+  });
+
+  const resourceGroups = resources.map((resource) => ({
+    id: `resource:${resource.id}`,
+    content: resource.name,
+    code: resource.code,
+    discipline: resource.discipline,
+    type: resource.resourceType
+  }));
+  const resourceGroupIds = new Set(resourceGroups.map((group) => group.id));
+  const resourceItems = taskResources
+    .map((assignment) => {
+      const task = tasksById.get(assignment.taskId);
+      const group = { id: `resource:${assignment.resourceId}` };
+      if (!task || !resourceGroupIds.has(group.id)) return null;
+      return {
+        ...timelineItemForTask(task, group, `:${assignment.resourceId}`),
+        allocationPercent: assignment.allocationPercent,
+        roleOnTask: assignment.roleOnTask
+      };
+    })
+    .filter(Boolean);
+
+  const equipmentGroups = equipment.map((item) => ({
+    id: `equipment:${item.id}`,
+    content: item.name,
+    code: item.code,
+    type: item.equipmentType,
+    status: item.status
+  }));
+  const equipmentGroupIds = new Set(equipmentGroups.map((group) => group.id));
+  const equipmentItems = taskEquipment
+    .map((assignment) => {
+      const task = tasksById.get(assignment.taskId);
+      const group = { id: `equipment:${assignment.equipmentId}` };
+      if (!task || !equipmentGroupIds.has(group.id)) return null;
+      return {
+        ...timelineItemForTask(task, group, `:${assignment.equipmentId}`),
+        usageNote: assignment.usageNote
+      };
+    })
+    .filter(Boolean);
+
+  const workPackageGroups = workPackages.map((workPackage) => ({
+    id: `workPackage:${workPackage.id}`,
+    content: `${workPackage.code} ${workPackage.name}`,
+    code: workPackage.code,
+    discipline: workPackage.discipline,
+    parentId: workPackage.parentId == null ? null : `workPackage:${workPackage.parentId}`
+  }));
+  const workPackageGroupIds = new Set(workPackageGroups.map((group) => group.id));
+  const workPackageItems = tasks
+    .map((task) => {
+      if (!task.workPackageId) return null;
+      const group = { id: `workPackage:${task.workPackageId}` };
+      if (!workPackageGroupIds.has(group.id)) return null;
+      return timelineItemForTask(task, group);
+    })
+    .filter(Boolean);
+
+  return {
+    tasks,
+    dependencies,
+    resources,
+    equipment,
+    workPackages,
+    taskResources,
+    taskEquipment,
+    taskDocuments,
+    projections: {
+      frappeGantt: {
+        tasks: frappeTasks,
+        dependencies: dependencies.map((dependency) => ({
+          id: dependency.id,
+          source: dependency.predecessorCode,
+          target: dependency.successorCode,
+          type: dependency.dependencyType,
+          lagDays: dependency.lagDays
+        }))
+      },
+      visTimeline: {
+        resource: { groups: resourceGroups, items: resourceItems },
+        equipment: { groups: equipmentGroups, items: equipmentItems },
+        workPackage: { groups: workPackageGroups, items: workPackageItems }
+      }
+    },
+    timing: {
+      tasksMs: tasksResult.durationMs,
+      dependenciesMs: dependenciesResult.durationMs,
+      resourcesMs: resourcesResult.durationMs,
+      equipmentMs: equipmentResult.durationMs,
+      workPackagesMs: workPackagesResult.durationMs,
+      taskResourcesMs: taskResourcesResult.durationMs,
+      taskEquipmentMs: taskEquipmentResult.durationMs,
+      taskDocumentsMs: taskDocumentsResult.durationMs
+    }
+  };
 }
 
 function mapLocationRow(row) {
@@ -330,6 +847,59 @@ async function resolveLocationType(typeCode) {
   return result.rows[0].id;
 }
 
+function comparableValue(value) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function validateLocationUpdatePayload(body, currentRow) {
+  const config = getTableInteractionConfig('locations');
+  const fieldErrors = {};
+
+  config.columns.forEach((column) => {
+    if (!(column.field in body)) return;
+    if (column.editType === EDIT_TYPES.READONLY) {
+      if (comparableValue(body[column.field]) !== comparableValue(currentRow[column.field])) {
+        fieldErrors[column.field] = column.readOnlyReason ?? 'Deze kolom is alleen-lezen.';
+      }
+      return;
+    }
+    const validation = validateCellValue(config, column.field, body[column.field]);
+    if (!validation.valid) fieldErrors[column.field] = validation.message;
+  });
+
+  return fieldErrors;
+}
+
+function changedAuditedLocationCells(before, after) {
+  const config = getTableInteractionConfig('locations');
+  return config.columns
+    .filter((column) => column.audit && column.editType !== EDIT_TYPES.READONLY)
+    .map((column) => ({
+      field: column.field,
+      oldValue: before[column.field] ?? null,
+      newValue: after[column.field] ?? null
+    }))
+    .filter((change) => comparableValue(change.oldValue) !== comparableValue(change.newValue));
+}
+
+async function auditCellChanges({ table, recordId, actor = 'unknown', changes }) {
+  if (!changes.length) return;
+  const numericId = Number(recordId);
+  await query(
+    `INSERT INTO audit_events (entity_type, entity_id, action, actor, details)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [
+      table,
+      Number.isFinite(numericId) ? numericId : 0,
+      'cell_update',
+      actor,
+      { recordId, changes }
+    ]
+  );
+}
+
 async function createLocation(request) {
   const input = normalizeLocationInput(await readBody(request));
   const typeId = await resolveLocationType(input.typeCode);
@@ -350,7 +920,36 @@ async function createLocation(request) {
 }
 
 async function updateLocation(request, id) {
-  const input = normalizeLocationInput(await readBody(request));
+  const body = await readBody(request);
+  const current = await query(
+    `SELECT
+       l.*,
+       lt.code AS type_code,
+       lt.name AS type_name,
+       p.code AS parent_code,
+       p.display_name AS parent_name,
+       (SELECT count(*)::int FROM location child WHERE child.parent_id = l.id) AS child_count
+     FROM location l
+     LEFT JOIN location_type lt ON lt.id = l.type_id
+     LEFT JOIN location p ON p.id = l.parent_id
+     WHERE l.id = $1`,
+    [id]
+  );
+  if (current.rows.length === 0) {
+    const error = new Error('Location not found');
+    error.statusCode = 404;
+    throw error;
+  }
+  const beforeRow = mapLocationRow(current.rows[0]);
+  const fieldErrors = validateLocationUpdatePayload(body, beforeRow);
+  if (Object.keys(fieldErrors).length > 0) {
+    const error = new Error('Location update contains invalid fields');
+    error.statusCode = 400;
+    error.fieldErrors = fieldErrors;
+    throw error;
+  }
+
+  const input = normalizeLocationInput(body);
   await assertNoLocationCycle(id, input.parentId);
   const typeId = await resolveLocationType(input.typeCode);
   const result = await query(
@@ -383,6 +982,31 @@ async function updateLocation(request, id) {
     error.statusCode = 404;
     throw error;
   }
+  const afterRow = {
+    ...beforeRow,
+    parentId: input.parentId,
+    typeId,
+    typeCode: input.typeCode,
+    type: input.typeCode ? body.type ?? beforeRow.type : null,
+    code: input.code,
+    name: input.name,
+    displayName: input.displayName,
+    complexCode: input.complexCode,
+    complexName: input.complexName,
+    abbreviation: input.abbreviation,
+    sortOrder: input.sortOrder,
+    source: input.source,
+    sourcePage: input.sourcePage,
+    sourceSection: input.sourceSection,
+    confidence: input.confidence,
+    metadata: input.metadata
+  };
+  await auditCellChanges({
+    table: 'location',
+    recordId: id,
+    actor: request.headers['x-actor'] ?? 'unknown',
+    changes: changedAuditedLocationCells(beforeRow, afterRow)
+  });
   return { location: result.rows[0] };
 }
 
@@ -408,6 +1032,29 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 200, tableConfigs);
       return;
     }
+    if (url.pathname === '/api/schema-catalog') {
+      sendJson(response, 200, await loadSchemaCatalog(query, tableConfigs));
+      return;
+    }
+    if (url.pathname === '/api/table-view-drafts' && request.method === 'GET') {
+      sendJson(response, 200, await listTableViewDrafts(query));
+      return;
+    }
+    if (url.pathname === '/api/table-view-drafts' && request.method === 'POST') {
+      const { body, catalog } = await tableViewDraftPayload(request);
+      sendJson(response, 201, await createTableViewDraft(query, body, catalog));
+      return;
+    }
+    const tableViewDraftMatch = url.pathname.match(/^\/api\/table-view-drafts\/([^/]+)$/);
+    if (tableViewDraftMatch && request.method === 'GET') {
+      sendJson(response, 200, await getTableViewDraft(query, tableViewDraftMatch[1]));
+      return;
+    }
+    if (tableViewDraftMatch && request.method === 'PUT') {
+      const { body, catalog } = await tableViewDraftPayload(request);
+      sendJson(response, 200, await updateTableViewDraft(query, tableViewDraftMatch[1], body, catalog));
+      return;
+    }
     if (url.pathname === '/api/rows') {
       sendJson(response, 200, await rows(url));
       return;
@@ -416,8 +1063,32 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 200, await facets(url));
       return;
     }
+    if (url.pathname === '/api/rows/cell' && request.method === 'PUT') {
+      sendJson(response, 200, await updateConfiguredCell(request));
+      return;
+    }
     if (url.pathname === '/api/stats') {
       sendJson(response, 200, await stats());
+      return;
+    }
+    if (url.pathname === '/api/planning/tasks' && request.method === 'GET') {
+      sendJson(response, 200, await planningTasks());
+      return;
+    }
+    if (url.pathname === '/api/planning/dependencies' && request.method === 'GET') {
+      sendJson(response, 200, await planningDependencies());
+      return;
+    }
+    if (url.pathname === '/api/planning/resources' && request.method === 'GET') {
+      sendJson(response, 200, await planningResources());
+      return;
+    }
+    if (url.pathname === '/api/planning/equipment' && request.method === 'GET') {
+      sendJson(response, 200, await planningEquipment());
+      return;
+    }
+    if (url.pathname === '/api/planning/workbench' && request.method === 'GET') {
+      sendJson(response, 200, await planningWorkbench());
       return;
     }
     if (url.pathname === '/api/locations' && request.method === 'GET') {
@@ -443,7 +1114,7 @@ const server = http.createServer(async (request, response) => {
     }
     sendJson(response, 404, { error: 'Not found' });
   } catch (error) {
-    sendJson(response, error.statusCode ?? 500, { error: error.message });
+    sendJson(response, error.statusCode ?? 500, { error: error.message, fieldErrors: error.fieldErrors });
   }
 });
 

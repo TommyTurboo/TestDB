@@ -108,6 +108,83 @@ mark {
   width: 100%;
 }
 
+.grid-box .ag-row-selected,
+.grid-box .ag-row-selected .ag-cell {
+  background: #eff6ff !important;
+}
+
+.grid-box .ag-pinned-left-cols-container .ag-row-selected .ag-cell:first-child {
+  box-shadow: inset 4px 0 0 #2563eb;
+}
+
+.grid-box .ag-center-cols-container .ag-row-selected .ag-cell:first-child {
+  box-shadow: inset 4px 0 0 #2563eb;
+}
+
+.grid-box:has(.ag-pinned-left-cols-container .ag-row-selected) .ag-center-cols-container .ag-row-selected .ag-cell:first-child {
+  box-shadow: none;
+}
+
+.table-editability-chip {
+  flex: 0 0 auto;
+  height: 30px;
+  border-radius: 6px;
+  font-weight: 800;
+}
+
+.table-column-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.table-column-header-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-column-header-badge {
+  flex: 0 0 auto;
+  min-width: 38px;
+  max-width: 54px;
+  overflow: hidden;
+  padding: 1px 5px;
+  border: 1px solid rgba(100, 116, 139, 0.24);
+  border-radius: 5px;
+  color: #64748b;
+  background: #f8fafc;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 16px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-column-header.is-editable .table-column-header-badge {
+  border-color: rgba(192, 99, 43, 0.38);
+  color: #8a3f18;
+  background: rgba(192, 99, 43, 0.1);
+}
+
+.grid-box .ag-cell.table-cell-editable {
+  cursor: cell;
+}
+
+.grid-box .ag-cell.table-cell-editable:hover {
+  box-shadow: inset 0 0 0 1px rgba(23, 78, 79, 0.28);
+  background: rgba(238, 244, 244, 0.48);
+}
+
+.grid-box .ag-cell.table-cell-readonly {
+  color: #64748b;
+}
+
 .footer-bar {
   padding: 14px 18px;
   border-top: 1px solid rgba(23, 78, 79, 0.12);
@@ -283,6 +360,107 @@ mark {
   padding: 12px;
 }
 
+.schema-builder-draft-card {
+  padding: 12px;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.schema-builder-preview {
+  padding: 12px;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.schema-builder-preview-grid {
+  display: flex;
+  min-height: 58px;
+  overflow: auto;
+  border: 1px solid rgba(23, 78, 79, 0.12);
+  border-radius: 7px;
+  background: #f8fafc;
+}
+
+.schema-builder-preview-cell {
+  flex: 0 0 150px;
+  min-width: 110px;
+  max-width: 640px;
+  padding: 8px 10px;
+  border-right: 1px solid rgba(23, 78, 79, 0.12);
+  background: #ffffff;
+}
+
+.schema-builder-edit-chip {
+  height: 20px;
+  margin-top: 6px;
+  border-radius: 5px;
+  font-size: 10.5px;
+  font-weight: 800;
+}
+
+.schema-builder-preview-cell.is-pinned-left {
+  border-left: 3px solid #174e4f;
+}
+
+.schema-builder-preview-cell.is-pinned-right {
+  border-right: 3px solid #c0632b;
+}
+
+.schema-builder-column-config {
+  padding: 10px;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.schema-builder-summary {
+  padding: 12px;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.schema-builder-section-title {
+  display: block;
+  margin-bottom: 6px;
+  color: #64748b;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.schema-builder-list {
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px 10px;
+  border: 1px solid rgba(23, 78, 79, 0.12);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.schema-builder-list .MuiListItem-root {
+  min-height: 38px;
+  gap: 8px;
+  border-bottom: 1px solid rgba(23, 78, 79, 0.08);
+}
+
+.schema-builder-list .MuiListItem-root:last-child {
+  border-bottom: 0;
+}
+
+.schema-builder-list .MuiListItemText-primary {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.schema-builder-list .MuiListItemText-secondary {
+  color: #64748b;
+  font-size: 11.5px;
+}
+
+.schema-builder-drafts {
+  max-height: 160px;
+}
+
 .locations-toolbar {
   border: 1px solid rgba(31, 41, 51, 0.12);
   border-radius: 10px;
@@ -350,7 +528,7 @@ mark {
   --ag-font-family: Aptos, Segoe UI, sans-serif;
   --ag-header-background-color: #e7eee8;
   --ag-odd-row-background-color: #fffaf0;
-  --ag-selected-row-background-color: rgba(192, 99, 43, 0.12);
+  --ag-selected-row-background-color: #eff6ff;
 }
 
 @media (max-width: 900px) {

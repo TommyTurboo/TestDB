@@ -1,0 +1,509 @@
+@import "../node_modules/frappe-gantt/dist/frappe-gantt.css";
+@import "../node_modules/vis-timeline/dist/vis-timeline-graph2d.css";
+
+.planning-page {
+  flex: 1 1 auto;
+  min-height: 100%;
+  padding: 0 16px 16px;
+  overflow: auto;
+}
+
+.planning-toolbar,
+.planning-panel,
+.planning-metric {
+  border: 1px solid rgba(31, 41, 51, 0.12);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+.planning-toolbar {
+  padding: 10px 12px;
+  flex: 0 0 auto;
+}
+
+.planning-toolbar .MuiTypography-h6,
+.planning-panel .MuiTypography-h6 {
+  font-size: 15px;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.planning-toolbar .MuiTextField-root {
+  width: min(360px, 42vw);
+}
+
+.planning-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.planning-metric {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 68px;
+  padding: 10px 12px;
+}
+
+.planning-metric-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 7px;
+  color: #174e4f;
+  background: rgba(23, 78, 79, 0.09);
+}
+
+.planning-workspace {
+  flex: 0 0 auto;
+  align-items: flex-start;
+  min-height: 0;
+  overflow: visible;
+}
+
+.planning-panel {
+  padding: 12px;
+}
+
+.planning-list {
+  flex: 0 0 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.planning-filters {
+  flex: 0 0 auto;
+}
+
+.planning-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) repeat(5, minmax(140px, 1fr));
+  gap: 8px;
+  align-items: center;
+}
+
+.planning-filter-grid .MuiTextField-root,
+.planning-filter-grid .MuiFormControl-root {
+  min-width: 0;
+}
+
+.planning-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.planning-side {
+  flex: 0 0 430px;
+  min-width: 360px;
+  min-height: 0;
+  position: sticky;
+  top: 12px;
+}
+
+.planning-task-list {
+  display: grid;
+  gap: 6px;
+  min-height: 360px;
+  max-height: 640px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.planning-task-row {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 54px;
+  padding: 8px 10px;
+  border: 1px solid rgba(31, 41, 51, 0.1);
+  border-left: 4px solid #94a3b8;
+  border-radius: 7px;
+  color: #1f2933;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.planning-task-row:hover,
+.planning-task-row.is-selected {
+  border-color: rgba(23, 78, 79, 0.34);
+  background: #f4f8f6;
+}
+
+.planning-task-row.kind-milestone {
+  border-left-color: #c0632b;
+}
+
+.planning-task-row.status-in_progress {
+  border-left-color: #174e4f;
+}
+
+.planning-task-row.status-complete {
+  border-left-color: #2e7d32;
+}
+
+.planning-task-row.status-blocked {
+  border-left-color: #d32f2f;
+}
+
+.planning-task-date {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.planning-task-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.planning-task-title {
+  overflow: hidden;
+  color: #102a2b;
+  font-size: 13.5px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planning-task-meta {
+  overflow: hidden;
+  color: #64748b;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planning-task-badges {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.planning-detail {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.planning-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.planning-edit-grid .MuiFormControl-root,
+.planning-edit-grid .MuiTextField-root {
+  min-width: 0;
+}
+
+.planning-gantt-panel {
+  flex: 0 0 auto;
+}
+
+.planning-timeline-panel {
+  flex: 0 0 auto;
+}
+
+.planning-view-tabs {
+  min-height: 30px;
+}
+
+.planning-view-tabs .MuiTab-root {
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.planning-compact-tabs {
+  border: 1px solid rgba(31, 41, 51, 0.12);
+  border-radius: 7px;
+}
+
+.planning-gantt-shell {
+  height: 302px;
+  overflow: hidden;
+  border: 1px solid rgba(31, 41, 51, 0.1);
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.planning-timeline-shell {
+  height: 310px;
+  overflow: hidden;
+  border: 1px solid rgba(31, 41, 51, 0.1);
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.planning-timeline-shell.planning-timeline-dense {
+  height: 230px;
+}
+
+.planning-timeline-shell.planning-timeline-large {
+  height: 490px;
+}
+
+.planning-timeline {
+  height: 100%;
+  min-height: 220px;
+}
+
+.planning-timeline .vis-timeline {
+  border: 0;
+  font-family: Aptos, Segoe UI, sans-serif;
+}
+
+.planning-timeline .vis-panel.vis-top {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #f8fafc;
+}
+
+.planning-timeline .vis-labelset .vis-label {
+  color: #334155;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.planning-timeline .vis-item {
+  border-color: rgba(23, 78, 79, 0.38);
+  border-radius: 5px;
+  background: #dbe8e8;
+  color: #102a2b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.planning-timeline .vis-item.status-complete {
+  border-color: #2e7d32;
+  background: #dcefe0;
+}
+
+.planning-timeline .vis-item.status-in_progress {
+  border-color: #174e4f;
+  background: #cfe2e2;
+}
+
+.planning-timeline .vis-item.status-blocked {
+  border-color: #d32f2f;
+  background: #f3d1d1;
+}
+
+.planning-timeline .vis-item.planning-milestone {
+  border-color: #c0632b;
+  background: #f3ddcf;
+}
+
+.planning-timeline .vis-item.vis-selected {
+  border-color: #102a2b;
+  box-shadow: 0 0 0 2px rgba(192, 99, 43, 0.38);
+}
+
+.planning-gantt {
+  min-width: 980px;
+  min-height: 280px;
+}
+
+.planning-gantt .gantt-container {
+  height: 300px;
+  border-radius: 7px;
+  font-family: Aptos, Segoe UI, sans-serif;
+  scroll-behavior: auto;
+}
+
+.planning-gantt .grid-header {
+  fill: #f8fafc;
+}
+
+.planning-gantt .bar {
+  fill: #94a3b8;
+}
+
+.planning-gantt .bar-progress {
+  fill: #174e4f;
+}
+
+.planning-gantt .planning-task-status-complete .bar,
+.planning-gantt .planning-task-status-complete-selected .bar {
+  fill: #8cc59b;
+}
+
+.planning-gantt .planning-task-status-complete .bar-progress,
+.planning-gantt .planning-task-status-complete-selected .bar-progress {
+  fill: #2e7d32;
+}
+
+.planning-gantt .planning-task-status-in_progress .bar,
+.planning-gantt .planning-task-status-in_progress-selected .bar {
+  fill: #79a6a7;
+}
+
+.planning-gantt .planning-task-status-blocked .bar,
+.planning-gantt .planning-task-status-blocked-selected .bar {
+  fill: #d77878;
+}
+
+.planning-gantt .planning-milestone-status-complete .bar,
+.planning-gantt .planning-milestone-status-complete-selected .bar,
+.planning-gantt .planning-milestone-status-in_progress .bar,
+.planning-gantt .planning-milestone-status-in_progress-selected .bar,
+.planning-gantt .planning-milestone-status-not_started .bar,
+.planning-gantt .planning-milestone-status-not_started-selected .bar,
+.planning-gantt .planning-milestone-status-blocked .bar,
+.planning-gantt .planning-milestone-status-blocked-selected .bar {
+  fill: #c0632b;
+  rx: 2px;
+}
+
+.planning-gantt .planning-milestone-status-complete .bar-progress,
+.planning-gantt .planning-milestone-status-complete-selected .bar-progress,
+.planning-gantt .planning-milestone-status-in_progress .bar-progress,
+.planning-gantt .planning-milestone-status-in_progress-selected .bar-progress,
+.planning-gantt .planning-milestone-status-not_started .bar-progress,
+.planning-gantt .planning-milestone-status-not_started-selected .bar-progress,
+.planning-gantt .planning-milestone-status-blocked .bar-progress,
+.planning-gantt .planning-milestone-status-blocked-selected .bar-progress {
+  fill: #c0632b;
+}
+
+.planning-gantt .planning-gantt-selected .bar {
+  stroke: #102a2b;
+  stroke-width: 3px;
+  filter: drop-shadow(0 0 5px rgba(192, 99, 43, 0.55));
+}
+
+.planning-gantt .planning-gantt-selected .bar-label {
+  font-weight: 800;
+}
+
+.planning-gantt .arrow {
+  stroke: rgba(23, 78, 79, 0.58);
+}
+
+.planning-gantt .date-range-highlight,
+.planning-gantt .current-highlight,
+.planning-gantt .current-ball-highlight {
+  display: none !important;
+}
+
+.planning-gantt-popup {
+  display: grid;
+  gap: 4px;
+  max-width: 280px;
+}
+
+.planning-gantt-popup strong {
+  color: #102a2b;
+}
+
+.planning-gantt-popup span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.planning-detail-facts,
+.planning-projection-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.planning-detail-facts > div,
+.planning-projection-cell,
+.planning-doc-row {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(31, 41, 51, 0.1);
+  border-radius: 7px;
+  background: #f8fafc;
+}
+
+.planning-detail-facts .MuiTypography-caption,
+.planning-projection-cell .MuiTypography-caption {
+  display: block;
+  color: #64748b;
+  font-weight: 800;
+}
+
+.planning-doc-list {
+  margin-top: 6px;
+}
+
+.planning-doc-row .MuiTypography-root {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planning-empty {
+  padding: 16px;
+  border: 1px dashed rgba(31, 41, 51, 0.18);
+  border-radius: 7px;
+  background: #f8fafc;
+}
+
+@media (max-width: 1100px) {
+  .planning-page {
+    overflow: auto;
+  }
+
+  .planning-metrics {
+    grid-template-columns: repeat(2, minmax(150px, 1fr));
+  }
+
+  .planning-side {
+    flex-basis: auto;
+    min-width: 0;
+  }
+
+  .planning-task-list {
+    max-height: 520px;
+  }
+
+  .planning-filter-grid {
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+  }
+
+  .planning-gantt-shell {
+    height: 300px;
+  }
+}
+
+@media (max-width: 720px) {
+  .planning-toolbar .MuiTextField-root {
+    width: 100%;
+  }
+
+  .planning-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .planning-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .planning-task-row {
+    grid-template-columns: 1fr;
+  }
+
+  .planning-edit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .planning-task-badges {
+    justify-content: flex-start;
+  }
+}

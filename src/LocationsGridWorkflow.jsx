@@ -32,11 +32,11 @@ import {
   getAllowedValuesForColumn,
   getSelectableColumnValues,
   getUniqueColumnValues,
-  isEditableLocationField,
   locationCellKey,
   parseClipboardTable,
   validateClipboardValue
 } from './locationDomain.js';
+import { EDIT_TYPES } from './tableConfig.js';
 
 export function PinStateIcon({ pin }) {
   if (pin === 'left') return <PushPinIcon fontSize="inherit" className="pin-left" />;
@@ -136,7 +136,7 @@ function defaultFilterResultSetGridHeight(resultSet) {
   return 34 + (visibleRows * 32) + 2;
 }
 
-function FilterResultSetGrid({ resultSet, columnDefs, getRowClass, onRowClicked, height }) {
+function FilterResultSetGrid({ resultSet, columnDefs, onRowClicked, height }) {
   const gridHeight = height ?? defaultFilterResultSetGridHeight(resultSet);
 
   return (
@@ -145,7 +145,6 @@ function FilterResultSetGrid({ resultSet, columnDefs, getRowClass, onRowClicked,
         rowData={resultSet.rows}
         columnDefs={columnDefs}
         getRowId={(params) => params.data.id}
-        getRowClass={getRowClass}
         rowHeight={32}
         headerHeight={34}
         suppressDragLeaveHidesColumns
@@ -159,6 +158,7 @@ function FilterResultSetGrid({ resultSet, columnDefs, getRowClass, onRowClicked,
 
 function CellValueEditorPopover({ editor, rows, columns, onClose, onApply }) {
   const [query, setQuery] = useState('');
+  const [draftValue, setDraftValue] = useState('');
   const column = columns.find((item) => item.field === editor?.field);
   const values = useMemo(() => {
     if (!editor?.field) return [];
@@ -169,13 +169,20 @@ function CellValueEditorPopover({ editor, rows, columns, onClose, onApply }) {
     if (!term) return values;
     return values.filter((item) => item.label.toLowerCase().includes(term));
   }, [values, query]);
+  const useChoiceList = column?.editType === EDIT_TYPES.SINGLE_SELECT || column?.editType === EDIT_TYPES.RELATION_SELECT;
+
+  useEffect(() => {
+    setDraftValue(editor?.currentValue == null ? '' : String(editor.currentValue));
+  }, [editor?.currentValue, editor?.field]);
 
   if (!editor) return null;
 
   return (
     <Popover
       open
-      anchorEl={editor.anchorEl}
+      anchorReference={editor.anchorPosition ? 'anchorPosition' : 'anchorEl'}
+      anchorPosition={editor.anchorPosition ?? undefined}
+      anchorEl={editor.anchorPosition ? undefined : editor.anchorEl}
       onClose={onClose}
       anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
       transformOrigin={{ vertical: 'top', horizontal: 'left' }}
@@ -184,35 +191,57 @@ function CellValueEditorPopover({ editor, rows, columns, onClose, onApply }) {
       <Stack spacing={1}>
         <Box>
           <Typography variant="subtitle2">{column?.headerName ?? editor.field}</Typography>
-          <Typography variant="caption" color="text.secondary">Kies een bestaande unieke waarde voor deze kolom</Typography>
+          <Typography variant="caption" color="text.secondary">
+            {useChoiceList ? 'Kies een toegestane waarde voor deze kolom' : 'Pas de celwaarde aan'}
+          </Typography>
         </Box>
-        <TextField
-          size="small"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Zoek waarde"
-          autoFocus
-          InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }}
-        />
-        <List dense className="cell-value-editor-list">
-          {visibleValues.map((item) => {
-            const selected = filterValueKey(editor.currentValue) === item.value;
-            return (
-              <ListItemButton key={item.value} dense selected={selected} onClick={() => onApply(editor, item.value)}>
-                <ListItemText
-                  primary={item.label}
-                  secondary={`${item.count.toLocaleString('nl-BE')} rijen`}
-                  primaryTypographyProps={{ noWrap: true, title: item.label }}
-                />
-              </ListItemButton>
-            );
-          })}
-          {visibleValues.length === 0 && (
-            <Typography variant="body2" color="text.secondary" className="column-value-empty">Geen waarden gevonden.</Typography>
-          )}
-        </List>
+        {useChoiceList ? (
+          <>
+            <TextField
+              size="small"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Zoek waarde"
+              autoFocus
+              InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }}
+            />
+            <List dense className="cell-value-editor-list">
+              {visibleValues.map((item) => {
+                const selected = filterValueKey(editor.currentValue) === item.value;
+                return (
+                  <ListItemButton key={item.value} dense selected={selected} onClick={() => onApply(editor, item.value)}>
+                    <ListItemText
+                      primary={item.label}
+                      secondary={`${item.count.toLocaleString('nl-BE')} rijen`}
+                      primaryTypographyProps={{ noWrap: true, title: item.label }}
+                    />
+                  </ListItemButton>
+                );
+              })}
+              {visibleValues.length === 0 && (
+                <Typography variant="body2" color="text.secondary" className="column-value-empty">Geen waarden gevonden.</Typography>
+              )}
+            </List>
+          </>
+        ) : (
+          <TextField
+            size="small"
+            value={draftValue}
+            onChange={(event) => setDraftValue(event.target.value)}
+            type={column?.editType === EDIT_TYPES.NUMBER ? 'number' : 'text'}
+            autoFocus
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') onApply(editor, draftValue);
+            }}
+          />
+        )}
         <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center">
-          <Typography variant="caption" color="text.secondary">Dubbelklik op een cel om te wijzigen.</Typography>
+          <Typography variant="caption" color="text.secondary">
+            {useChoiceList ? 'Dubbelklik op een cel om te wijzigen.' : 'Enter bewaart de waarde.'}
+          </Typography>
+          {!useChoiceList && (
+            <Button size="small" variant="contained" onClick={() => onApply(editor, draftValue)}>Bewaar</Button>
+          )}
           <Button size="small" onClick={onClose}>Sluit</Button>
         </Stack>
       </Stack>
@@ -220,7 +249,7 @@ function CellValueEditorPopover({ editor, rows, columns, onClose, onApply }) {
   );
 }
 
-function FilterResultSetPanel({ resultSet, columnDefs, columnLabels, height, onRemove, onToggle, getRowClass, onRowClicked }) {
+function FilterResultSetPanel({ resultSet, columnDefs, columnLabels, height, onRemove, onToggle, onRowClicked }) {
   return (
     <Box className={`filter-result-set-panel ${resultSet.collapsed ? 'is-collapsed' : ''}`}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1} className="filter-result-set-bar">
@@ -240,7 +269,6 @@ function FilterResultSetPanel({ resultSet, columnDefs, columnLabels, height, onR
         <FilterResultSetGrid
           resultSet={resultSet}
           columnDefs={columnDefs}
-          getRowClass={getRowClass}
           onRowClicked={onRowClicked}
           height={height}
         />
@@ -254,6 +282,15 @@ function LocationColumnHeader(props) {
   const field = props.column?.getColId?.();
   const activeFilterCount = props.activeFilterCount ?? 0;
   const pinnedLeft = props.pin === 'left';
+  const editTypeLabel = {
+    [EDIT_TYPES.READONLY]: 'Alleen-lezen',
+    [EDIT_TYPES.TEXT]: 'Tekst',
+    [EDIT_TYPES.NUMBER]: 'Nummer',
+    [EDIT_TYPES.DATE]: 'Datum',
+    [EDIT_TYPES.BOOLEAN]: 'Ja/nee',
+    [EDIT_TYPES.SINGLE_SELECT]: 'Keuzelijst',
+    [EDIT_TYPES.RELATION_SELECT]: 'Lookup'
+  }[props.editType] ?? props.editType;
 
   useEffect(() => {
     if (!props.column) return undefined;
@@ -290,6 +327,11 @@ function LocationColumnHeader(props) {
         <span>{props.displayName}</span>
         {sort && <span className="location-column-sort">{sort === 'asc' ? 'ASC' : 'DESC'}</span>}
       </button>
+      {props.editType && (
+        <Tooltip title={props.editable ? `${editTypeLabel}: dubbelklik om te wijzigen` : (props.readOnlyReason ?? 'Alleen-lezen')}>
+          <span className={`location-edit-affordance edit-${props.editType}`}>{editTypeLabel}</span>
+        </Tooltip>
+      )}
       <Tooltip title={pinnedLeft ? 'Pin links verwijderen' : 'Pin kolom links'}>
         <button
           type="button"
@@ -342,7 +384,8 @@ export function MainDataGrid({
   onTogglePinLeft,
   onApplyCellValue,
   onApplyPastedCells,
-  onPasteNotice
+  onPasteNotice,
+  cellStatus = {}
 }) {
   const [cellEditor, setCellEditor] = useState(null);
   const [headerFilter, setHeaderFilter] = useState(null);
@@ -355,7 +398,6 @@ export function MainDataGrid({
   const suppressNextCellClickRef = useRef(false);
   const [manualMainGridHeight, setManualMainGridHeight] = useState(null);
   const [manualResultSetHeights, setManualResultSetHeights] = useState({});
-  const getLocationRowClass = (params) => params.data?.id === selectedId ? 'location-row-selected' : '';
   const mainGridVisibleRows = resultSets.length > 0
     ? Math.min(Math.max(filteredRows.length, 6), 12)
     : null;
@@ -365,16 +407,28 @@ export function MainDataGrid({
     field: column.field,
     headerName: column.headerName
   }));
+  const columnsByField = useMemo(
+    () => new Map(locationColumnDefs.map((column) => [column.field, column])),
+    [locationColumnDefs]
+  );
   const gridColumnDefs = useMemo(() => locationColumnDefs.map((column) => ({
     ...column,
+    editable: false,
     headerComponent: LocationColumnHeader,
     headerComponentParams: {
       activeFilterCount: columnValueFilters[column.field]?.length ?? 0,
       pin: column.pinned ?? null,
+      editType: column.editType,
+      editable: column.editable,
+      readOnlyReason: column.readOnlyReason,
       onTogglePinLeft,
       onOpenFilter: (anchorEl, field) => setHeaderFilter({ anchorEl, field })
     }
   })), [locationColumnDefs, columnValueFilters, onTogglePinLeft]);
+
+  function isEditableGridField(field) {
+    return Boolean(columnsByField.get(field)?.editable);
+  }
 
   useEffect(() => {
     const resultSetIds = new Set(resultSets.map((resultSet) => resultSet.id));
@@ -444,7 +498,7 @@ export function MainDataGrid({
   function toggleCellSelection(event, previousFocusedCell = null) {
     const field = event.column?.getColId();
     const rowId = event.data?.id;
-    if (!field || !rowId || !isEditableLocationField(field)) return;
+    if (!field || !rowId || !isEditableGridField(field)) return;
     if (!canSelectCell(field)) {
       onPasteNotice(`Selectie blijft beperkt tot kolom ${selectedCellColumn()}.`);
       return;
@@ -477,7 +531,7 @@ export function MainDataGrid({
       const currentColumn = currentFirstKey ? currentFirstKey.split('::')[1] : null;
       const lockedColumn = replace ? cells.find((cell) => cell?.field)?.field : currentColumn;
       cells.forEach((cell) => {
-        if (!cell?.rowId || !cell?.field || !isEditableLocationField(cell.field)) return;
+        if (!cell?.rowId || !cell?.field || !isEditableGridField(cell.field)) return;
         if (lockedColumn && cell.field !== lockedColumn) return;
         next.add(locationCellKey(cell.rowId, cell.field));
       });
@@ -488,7 +542,7 @@ export function MainDataGrid({
   function cellFromGridEvent(event) {
     const field = event.column?.getColId();
     const rowId = event.data?.id;
-    if (!field || !rowId || !isEditableLocationField(field)) return null;
+    if (!field || !rowId || !isEditableGridField(field)) return null;
     return {
       rowIndex: event.rowIndex,
       field,
@@ -557,12 +611,21 @@ export function MainDataGrid({
   function openCellEditor(event) {
     rememberCell(event);
     const field = event.column?.getColId();
-    if (!field || !event.data || !isEditableLocationField(field)) return;
+    if (!field || !event.data || !isEditableGridField(field)) return;
     const target = event.event?.target;
     const anchorEl = target instanceof Element ? target.closest('.ag-cell') ?? target : null;
-    if (!anchorEl) return;
+    const cellRect = anchorEl?.getBoundingClientRect?.();
+    const anchorPosition = cellRect
+      ? { top: Math.round(cellRect.bottom), left: Math.round(cellRect.left) }
+      : (
+        Number.isFinite(event.event?.clientX) && Number.isFinite(event.event?.clientY)
+          ? { top: event.event.clientY, left: event.event.clientX }
+          : null
+      );
+    if (!anchorEl && !anchorPosition) return;
     setCellEditor({
       anchorEl,
+      anchorPosition,
       row: event.data,
       field,
       currentValue: event.value
@@ -641,7 +704,7 @@ export function MainDataGrid({
         const rawValue = pastedRows.length === 1 && pastedRows[0].length === 1
           ? pastedRows[0][0]
           : pastedValues[index % pastedValues.length];
-        if (rawValue == null || !isEditableLocationField(cell.field)) return;
+        if (rawValue == null || !isEditableGridField(cell.field)) return;
 
         total += 1;
         const allowedValues = getAllowedValuesForColumn(allRows, cell.field);
@@ -671,7 +734,7 @@ export function MainDataGrid({
       pastedRow.forEach((rawValue, columnOffset) => {
         const column = displayedColumns[startColumnIndex + columnOffset];
         const field = column?.getColId();
-        if (!field || !isEditableLocationField(field)) return;
+        if (!field || !isEditableGridField(field)) return;
 
         total += 1;
         const allowedValues = getAllowedValuesForColumn(allRows, field);
@@ -761,7 +824,7 @@ export function MainDataGrid({
 
   useEffect(() => {
     locationGridRef.current?.api?.refreshCells({ force: true });
-  }, [selectedCellKeys, filteredRows]);
+  }, [selectedCellKeys, filteredRows, cellStatus]);
 
   useEffect(() => {
     function endCellDragSelection() {
@@ -862,12 +925,14 @@ export function MainDataGrid({
             rowData={filteredRows}
             columnDefs={gridColumnDefs}
             getRowId={(params) => params.data.id}
-            getRowClass={getLocationRowClass}
-            defaultColDef={{
+          defaultColDef={{
               filter: false,
               suppressHeaderMenuButton: true,
               cellClassRules: {
-                'location-cell-multi-selected': (params) => selectedCellKeys.has(locationCellKey(params.data?.id, params.column?.getColId()))
+                'location-cell-multi-selected': (params) => selectedCellKeys.has(locationCellKey(params.data?.id, params.column?.getColId())),
+                'location-cell-saving': (params) => cellStatus[locationCellKey(params.data?.id, params.column?.getColId())]?.state === 'saving',
+                'location-cell-success': (params) => cellStatus[locationCellKey(params.data?.id, params.column?.getColId())]?.state === 'success',
+                'location-cell-error': (params) => cellStatus[locationCellKey(params.data?.id, params.column?.getColId())]?.state === 'error'
               }
             }}
             rowHeight={38}
@@ -899,7 +964,7 @@ export function MainDataGrid({
             suppressClickEdit
             onCellValueChanged={(event) => {
               const field = event.column?.getColId();
-              if (!field || !isEditableLocationField(field) || event.oldValue === event.newValue) return;
+              if (!field || !isEditableGridField(field) || event.oldValue === event.newValue) return;
               onApplyCellValue({ ...event.data, [field]: event.oldValue }, field, filterValueKey(event.newValue));
             }}
             onFirstDataRendered={(event) => {
@@ -930,7 +995,6 @@ export function MainDataGrid({
                   height={manualResultSetHeights[resultSet.id]}
                   onRemove={onRemoveResultSet}
                   onToggle={onToggleResultSet}
-                  getRowClass={getLocationRowClass}
                   onRowClicked={(event) => setSelectedId(event.data.id)}
                 />
                 {!resultSet.collapsed && (

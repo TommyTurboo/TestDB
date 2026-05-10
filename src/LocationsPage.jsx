@@ -46,6 +46,7 @@ import {
   confidenceLabels,
   defaultLocationColumns,
   filterTreeNodes,
+  getLocationColumnConfig,
   isEditableLocationField,
   locationBaseColumns,
   matchesColumnValueFilters,
@@ -167,11 +168,13 @@ function LocationsPage() {
     error,
     moveLocation,
     updateLocationCell,
-    updateLocationCells
+    updateLocationCells,
+    cellStatus
   } = useLocationsData();
   const [pasteNotice, setPasteNotice] = useState('');
   const [treeOpen, setTreeOpen] = useState(true);
   const [controlOpen, setControlOpen] = useState(true);
+  const [detailOpen, setDetailOpen] = useState(true);
   const [detailTab, setDetailTab] = useState('overview');
   const [columns, setColumns] = useState(defaultLocationColumns);
   const [scopedColumns, setScopedColumns] = useState([]);
@@ -214,6 +217,7 @@ function LocationsPage() {
   const locationColumnDefs = useMemo(() => orderedLocationColumns
     .filter((column) => column.visible)
     .map((column) => ({
+      ...getLocationColumnConfig(column.field),
       field: column.field,
       headerName: column.label,
       width: column.width,
@@ -221,6 +225,7 @@ function LocationsPage() {
       sortable: true,
       resizable: true,
       editable: isEditableLocationField(column.field),
+      cellClass: isEditableLocationField(column.field) ? 'location-cell-editable' : 'location-cell-readonly',
       filter: false,
       suppressHeaderMenuButton: true,
       cellRenderer: (params) => {
@@ -351,6 +356,7 @@ function LocationsPage() {
     setLayoutWidths({ tree: 380, controls: 360, detail: 340 });
     setControlOpen(true);
     setTreeOpen(true);
+    setDetailOpen(true);
   }
 
   function startPanelResize(panel, event) {
@@ -392,6 +398,9 @@ function LocationsPage() {
           <Stack direction="row" spacing={0.75} alignItems="center">
             <Button size="small" variant={treeOpen ? 'contained' : 'outlined'} startIcon={<AccountTreeIcon />} onClick={() => setTreeOpen((open) => !open)}>
               Tree
+            </Button>
+            <Button size="small" variant={detailOpen ? 'contained' : 'outlined'} startIcon={<InfoOutlinedIcon />} onClick={() => setDetailOpen((open) => !open)}>
+              Dossier
             </Button>
             <Tooltip title={controlOpen ? 'Controls verbergen' : 'Controls tonen'}>
               <IconButton size="small" onClick={() => setControlOpen((open) => !open)} color={controlOpen ? 'secondary' : 'primary'}><TuneIcon fontSize="small" /></IconButton>
@@ -486,6 +495,7 @@ function LocationsPage() {
           onApplyCellValue={updateLocationCell}
           onApplyPastedCells={updateLocationCells}
           onPasteNotice={setPasteNotice}
+          cellStatus={cellStatus}
         />
 
         {controlOpen && <Paper className="locations-control-card resizable-panel" elevation={0} style={{ flexBasis: layoutWidths.controls, minWidth: layoutWidths.controls }}>
@@ -512,11 +522,16 @@ function LocationsPage() {
           </Stack>
         </Paper>}
 
-        <Paper className="locations-detail-card resizable-panel" elevation={0} style={{ flexBasis: layoutWidths.detail, minWidth: layoutWidths.detail }}>
+        {detailOpen && <Paper className="locations-detail-card resizable-panel" elevation={0} style={{ flexBasis: layoutWidths.detail, minWidth: layoutWidths.detail }}>
           <Box className="resize-handle resize-handle-left" onPointerDown={(event) => startPanelResize('detail', event)} />
-          <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-            <InfoOutlinedIcon color="primary" />
-            <Typography variant="h6">Locatiedossier</Typography>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1} sx={{ mb: 1 }}>
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
+              <InfoOutlinedIcon color="primary" />
+              <Typography variant="h6" noWrap>Locatiedossier</Typography>
+            </Stack>
+            <Tooltip title="Locatiedossier verbergen">
+              <IconButton size="small" onClick={() => setDetailOpen(false)}><ChevronRightIcon fontSize="small" /></IconButton>
+            </Tooltip>
           </Stack>
           {!selected && <Typography color="text.secondary">Selecteer een locatie.</Typography>}
           {selected && (
@@ -575,7 +590,7 @@ function LocationsPage() {
               )}
             </Stack>
           )}
-        </Paper>
+        </Paper>}
       </Stack>
     </Stack>
   );

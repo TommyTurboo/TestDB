@@ -38,6 +38,8 @@ import {
   createTheme
 } from '@mui/material';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import PushPinIcon from '@mui/icons-material/PushPin';
 import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined';
 import SearchIcon from '@mui/icons-material/Search';
@@ -55,6 +57,10 @@ const FULL_GRID_LIMIT = 100000;
 
 function createLocationsPageLoader() {
   return lazy(() => import('./LocationsPage.jsx'));
+}
+
+function createPlanningPageLoader() {
+  return lazy(() => import('./PlanningPage.jsx'));
 }
 
 const theme = createTheme({
@@ -132,6 +138,53 @@ function stateForTable(schema, table) {
   };
 }
 
+function stateForDraft(schema, draft) {
+  const tableConfig = schema[draft.rootTable];
+  if (!tableConfig) return null;
+  const draftColumnsByName = new Map((draft.columns ?? []).map((column) => [column.name, column]));
+  const selectedColumns = (draft.columns ?? [])
+    .map((draftColumn, index) => {
+      const baseColumn = tableConfig.columns.find((column) => column.field === draftColumn.name);
+      if (!baseColumn) return null;
+      const editType = draftColumn.editType ?? baseColumn.editType ?? 'readonly';
+      return {
+        ...baseColumn,
+        label: draftColumn.label ?? baseColumn.label,
+        description: draftColumn.description ?? baseColumn.description ?? '',
+        visible: draftColumn.visible !== false,
+        order: Number.isFinite(Number(draftColumn.order)) ? Number(draftColumn.order) : index,
+        pin: draftColumn.pin ?? baseColumn.pinned ?? null,
+        width: draftColumn.width ?? baseColumn.width,
+        editType,
+        editable: editType !== 'readonly',
+        required: draftColumn.required ?? baseColumn.required,
+        min: draftColumn.min ?? baseColumn.min,
+        max: draftColumn.max ?? baseColumn.max,
+        readOnlyReason: editType === 'readonly' ? 'Alleen-lezen in builder draft.' : baseColumn.readOnlyReason
+      };
+    })
+    .filter(Boolean);
+  const remainingColumns = tableConfig.columns
+    .filter((column) => !draftColumnsByName.has(column.field))
+    .map((column, index) => ({
+      ...column,
+      visible: false,
+      order: selectedColumns.length + index,
+      pin: column.pinned ?? null
+    }));
+
+  return {
+    ...defaultState(schema),
+    table: draft.rootTable,
+    columns: [...selectedColumns, ...remainingColumns],
+    selectedFacet: selectedColumns[0]?.field ?? tableConfig.columns[0]?.field,
+    quick: '',
+    scopedColumns: [],
+    facets: {},
+    sort: tableConfig.defaultSort ? [{ ...tableConfig.defaultSort }] : []
+  };
+}
+
 function PinStateIcon({ pin }) {
   if (pin === 'left') return <PushPinIcon fontSize="inherit" className="pin-left" />;
   if (pin === 'right') return <PushPinIcon fontSize="inherit" className="pin-right" />;
@@ -188,6 +241,470 @@ function highlight(value, term) {
   );
 }
 
+function editTypeLabel(editType) {
+  if (editType === 'singleSelect') return 'lijst';
+  if (editType === 'relationSelect') return 'relatie';
+  if (editType === 'number') return 'getal';
+  if (editType === 'date') return 'datum';
+  if (editType === 'boolean') return 'ja/nee';
+  if (editType === 'text') return 'tekst';
+  return 'vast';
+}
+
+const builderEditTypes = [
+  { value: 'readonly', label: 'Read-only', types: null },
+  { value: 'text', label: 'Tekst', types: ['text', 'long_text', 'markdown', 'uuid'] },
+  { value: 'number', label: 'Getal', types: ['number'] },
+  { value: 'date', label: 'Datum', types: ['date', 'datetime'] }
+];
+
+function builderEditTypeFits(editType, columnType) {
+  const option = builderEditTypes.find((item) => item.value === editType);
+  return !option?.types || option.types.includes(columnType);
+}
+
+function TableColumnHeader({ displayName, editType, editable, readOnlyReason }) {
+  const label = editTypeLabel(editType);
+  const title = editable
+    ? `${displayName}: bewerkbaar als ${label}`
+    : `${displayName}: ${readOnlyReason ?? 'alleen-lezen'}`;
+  return (
+    <Tooltip title={title}>
+      <span className={`table-column-header ${editable ? 'is-editable' : 'is-readonly'}`}>
+        <span className="table-column-header-name">{displayName}</span>
+        <span className="table-column-header-badge">{label}</span>
+      </span>
+    </Tooltip>
+  );
+}
+
+function SchemaBuilderPanel({
+  catalog,
+  catalogError,
+  drafts,
+  draftsError,
+  activeDraft,
+  savingDraft,
+  selectedRootTable,
+  onSelectRootTable,
+  onUseTable,
+  onOpenDraft,
+  onPreviewDraft,
+  onSaveDraft
+}) {
+  const [draftName, setDraftName] = useState('');
+  const [selectedColumns, setSelectedColumns] = useState([]);
+  const orderedDraftColumns = useMemo(
+    () => [...selectedColumns].sort((a, b) => a.order - b.order),
+    [selectedColumns]
+  );
+  const visibleDraftColumns = orderedDraftColumns.filter((column) => column.visible !== false);
+
+  useEffect(() => {
+    if (!activeDraft) return;
+    const rootTable = catalog?.tables.find((table) => table.name === activeDraft.rootTable);
+    setDraftName(activeDraft.name ?? '');
+    setSelectedColumns((activeDraft.columns ?? []).map((column, order) => ({
+      ...(typeof column === 'string' ? { name: column } : column),
+      label: typeof column === 'string'
+        ? rootTable?.columns.find((item) => item.name === column)?.label ?? column
+        : column.label ?? rootTable?.columns.find((item) => item.name === column.name)?.label ?? column.name,
+      description: typeof column === 'string' ? '' : column.description ?? '',
+      visible: typeof column === 'string' ? true : column.visible !== false,
+      order: typeof column === 'string' || !Number.isFinite(Number(column.order)) ? order : Number(column.order),
+      pin: typeof column === 'string' ? null : column.pin ?? null,
+      width: typeof column === 'string' ? null : column.width ?? null,
+      editType: typeof column === 'string' ? 'readonly' : column.editType ?? 'readonly',
+      required: typeof column === 'string' ? false : column.required === true,
+      min: typeof column === 'string' ? null : column.min ?? null,
+      max: typeof column === 'string' ? null : column.max ?? null
+    })));
+  }, [activeDraft, catalog]);
+
+  useEffect(() => {
+    if (!catalog || activeDraft?.rootTable === selectedRootTable) return;
+    const rootTable = catalog.tables.find((table) => table.name === selectedRootTable) ?? catalog.tables[0];
+    setDraftName((current) => current || `${rootTable?.label ?? 'Nieuwe view'} draft`);
+    setSelectedColumns((rootTable?.columns ?? []).slice(0, 6).map((column, order) => ({
+      name: column.name,
+      label: column.label,
+      description: '',
+      type: column.type,
+      nullable: column.nullable,
+      visible: true,
+      order,
+      pin: null,
+      width: null,
+      editType: 'readonly',
+      required: false,
+      min: null,
+      max: null
+    })));
+  }, [catalog, selectedRootTable, activeDraft?.rootTable]);
+
+  if (catalogError) {
+    return (
+      <Alert severity="warning">
+        Schema-catalogus kon niet worden geladen: {catalogError}
+      </Alert>
+    );
+  }
+  if (!catalog) return <LinearProgress />;
+
+  const rootTable = catalog.tables.find((table) => table.name === selectedRootTable) ?? catalog.tables[0];
+  const supportedRelations = rootTable?.relations.filter((relation) => relation.supported) ?? [];
+  const unsupportedRelations = rootTable?.relations.filter((relation) => !relation.supported) ?? [];
+  const canSave = Boolean(draftName.trim() && rootTable && selectedColumns.length > 0);
+  const selectedColumnNames = new Set(selectedColumns.map((column) => column.name));
+
+  function toggleDraftColumn(columnName) {
+    setSelectedColumns((current) => {
+      if (current.some((column) => column.name === columnName)) {
+        return current
+          .filter((column) => column.name !== columnName)
+          .map((column, order) => ({ ...column, order }));
+      }
+      const catalogColumn = rootTable.columns.find((column) => column.name === columnName);
+      if (!catalogColumn) return current;
+      return [...current, {
+        name: catalogColumn.name,
+        label: catalogColumn.label,
+        description: '',
+        type: catalogColumn.type,
+        nullable: catalogColumn.nullable,
+        visible: true,
+        order: current.length,
+        pin: null,
+        width: null,
+        editType: 'readonly',
+        required: false,
+        min: null,
+        max: null
+      }];
+    });
+  }
+
+  function updateDraftColumn(columnName, patch) {
+    setSelectedColumns((current) => current.map((column) => (
+      column.name === columnName ? { ...column, ...patch } : column
+    )));
+  }
+
+  function moveDraftColumn(columnName, direction) {
+    setSelectedColumns((current) => {
+      const sorted = [...current].sort((a, b) => a.order - b.order);
+      const index = sorted.findIndex((column) => column.name === columnName);
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= sorted.length) return current;
+      return arrayMove(sorted, index, nextIndex).map((column, order) => ({ ...column, order }));
+    });
+  }
+
+  function currentDraftPayload() {
+    return {
+      id: activeDraft?.rootTable === rootTable?.name ? activeDraft.id : undefined,
+      name: draftName,
+      rootTable: rootTable?.name,
+      columns: orderedDraftColumns
+    };
+  }
+
+  return (
+    <Stack spacing={1.5}>
+      <Box>
+        <Typography variant="subtitle2" fontWeight={800}>Table View Builder</Typography>
+        <Typography variant="body2" color="text.secondary">
+          Kies een bestaande database table als root voor een toekomstige view.
+        </Typography>
+      </Box>
+      <TextField
+        select
+        size="small"
+        label="Root table"
+        value={rootTable?.name ?? ''}
+        onChange={(event) => onSelectRootTable(event.target.value)}
+      >
+        {catalog.tables.map((table) => (
+          <MenuItem key={table.name} value={table.name}>
+            {table.label}
+          </MenuItem>
+        ))}
+      </TextField>
+
+      {rootTable && (
+        <Stack spacing={1.25}>
+          <Paper variant="outlined" className="schema-builder-draft-card">
+            <Stack spacing={1}>
+              <TextField
+                size="small"
+                label="Draftnaam"
+                value={draftName}
+                onChange={(event) => setDraftName(event.target.value)}
+              />
+              <Button
+                size="small"
+                variant="contained"
+                startIcon={<SaveIcon />}
+                disabled={!canSave || savingDraft}
+                onClick={() => onSaveDraft(currentDraftPayload())}
+              >
+                {savingDraft ? 'Opslaan...' : activeDraft?.rootTable === rootTable.name ? 'Draft bijwerken' : 'Draft opslaan'}
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={!rootTable.configured || selectedColumns.length === 0}
+                onClick={() => onPreviewDraft(currentDraftPayload())}
+              >
+                Preview in Table Lab
+              </Button>
+              <Typography variant="caption" color="text.secondary">
+                {selectedColumns.length} geselecteerde kolommen, {visibleDraftColumns.length} zichtbaar
+              </Typography>
+            </Stack>
+          </Paper>
+
+          <Paper variant="outlined" className="schema-builder-preview">
+            <Typography className="schema-builder-section-title" variant="caption">Preview</Typography>
+            <Box className="schema-builder-preview-grid">
+              {visibleDraftColumns.length === 0 && (
+                <Typography variant="body2" color="text.secondary">Geen zichtbare kolommen geselecteerd.</Typography>
+              )}
+              {visibleDraftColumns.map((column) => (
+                <Box
+                  key={column.name}
+                  className={`schema-builder-preview-cell ${column.pin ? `is-pinned-${column.pin}` : ''}`}
+                  sx={{ width: column.width ? `${column.width}px` : undefined }}
+                >
+                  <Typography noWrap fontWeight={800}>{column.label}</Typography>
+                  <Typography noWrap variant="caption" color="text.secondary">
+                    {column.description || `${column.name} · ${column.type}`}
+                  </Typography>
+                  <Chip
+                    className="schema-builder-edit-chip"
+                    size="small"
+                    color={column.editType === 'readonly' ? 'default' : 'secondary'}
+                    label={column.editType === 'readonly' ? 'read-only' : column.editType}
+                  />
+                </Box>
+              ))}
+            </Box>
+          </Paper>
+
+          <Box>
+            <Typography className="schema-builder-section-title" variant="caption">Opgeslagen drafts</Typography>
+            {draftsError && <Alert severity="warning">{draftsError}</Alert>}
+            <List dense className="schema-builder-list schema-builder-drafts">
+              {drafts.length === 0 && (
+                <ListItem dense disablePadding>
+                  <ListItemText primary="Nog geen drafts opgeslagen." />
+                </ListItem>
+              )}
+              {drafts.map((draft) => (
+                <ListItemButton
+                  key={draft.id}
+                  selected={activeDraft?.id === draft.id}
+                  onClick={() => onOpenDraft(draft.id)}
+                >
+                  <ListItemText
+                    primary={draft.name}
+                    secondary={`${draft.rootTable} · ${draft.columns.filter((column) => column.visible !== false).length}/${draft.columns.length} zichtbaar`}
+                  />
+                </ListItemButton>
+              ))}
+            </List>
+          </Box>
+
+          <Paper variant="outlined" className="schema-builder-summary">
+            <Stack spacing={1}>
+              <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography fontWeight={800} noWrap>{rootTable.label}</Typography>
+                  <Typography variant="caption" color="text.secondary">{rootTable.name}</Typography>
+                </Box>
+                <Chip size="small" label={rootTable.configured ? 'fallback bestaat' : 'nieuw'} color={rootTable.configured ? 'success' : 'default'} />
+              </Stack>
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                <Chip size="small" label={`${rootTable.columns.length} kolommen`} />
+                <Chip size="small" label={`${supportedRelations.length} relaties`} />
+                {unsupportedRelations.length > 0 && <Chip size="small" color="warning" label={`${unsupportedRelations.length} niet ondersteund`} />}
+              </Stack>
+              {rootTable.configured && (
+                <Button size="small" variant="outlined" onClick={() => onUseTable(rootTable.name)}>
+                  Open in Table Lab
+                </Button>
+              )}
+            </Stack>
+          </Paper>
+
+          <Box>
+            <Typography className="schema-builder-section-title" variant="caption">Kolommen</Typography>
+            <List dense className="schema-builder-list">
+              {rootTable.columns.map((column) => (
+                <ListItem key={column.name} dense disablePadding secondaryAction={
+                  <Checkbox
+                    edge="end"
+                    checked={selectedColumnNames.has(column.name)}
+                    onChange={() => toggleDraftColumn(column.name)}
+                  />
+                }>
+                  <ListItemText
+                    primary={column.label}
+                    secondary={`${column.name} · ${column.type}${column.nullable ? ' · optioneel' : ' · verplicht'}`}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          </Box>
+
+          <Box>
+            <Typography className="schema-builder-section-title" variant="caption">Kolomconfiguratie</Typography>
+            <Stack spacing={1}>
+              {orderedDraftColumns.length === 0 && (
+                <Typography variant="body2" color="text.secondary">Selecteer kolommen om ze te configureren.</Typography>
+              )}
+              {orderedDraftColumns.map((column, index) => (
+                <Paper key={column.name} variant="outlined" className="schema-builder-column-config">
+                  <Stack spacing={1}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Checkbox
+                        checked={column.visible !== false}
+                        onChange={(event) => updateDraftColumn(column.name, { visible: event.target.checked })}
+                      />
+                      <Box sx={{ minWidth: 0, flex: 1 }}>
+                        <Typography fontWeight={800} noWrap>{column.name}</Typography>
+                        <Typography variant="caption" color="text.secondary">{column.type}</Typography>
+                      </Box>
+                      <Tooltip title="Omhoog">
+                        <span>
+                          <IconButton size="small" disabled={index === 0} onClick={() => moveDraftColumn(column.name, -1)}>
+                            <KeyboardArrowUpIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title="Omlaag">
+                        <span>
+                          <IconButton size="small" disabled={index === orderedDraftColumns.length - 1} onClick={() => moveDraftColumn(column.name, 1)}>
+                            <KeyboardArrowDownIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    </Stack>
+                    <TextField
+                      size="small"
+                      label="Label"
+                      value={column.label}
+                      onChange={(event) => updateDraftColumn(column.name, { label: event.target.value })}
+                    />
+                    <TextField
+                      size="small"
+                      label="Beschrijving"
+                      value={column.description ?? ''}
+                      onChange={(event) => updateDraftColumn(column.name, { description: event.target.value })}
+                    />
+                    <Stack direction="row" spacing={1}>
+                      <TextField
+                        select
+                        size="small"
+                        label="Pin"
+                        value={column.pin ?? ''}
+                        onChange={(event) => updateDraftColumn(column.name, { pin: event.target.value || null })}
+                        sx={{ flex: 1 }}
+                      >
+                        <MenuItem value="">Geen</MenuItem>
+                        <MenuItem value="left">Links</MenuItem>
+                        <MenuItem value="right">Rechts</MenuItem>
+                      </TextField>
+                      <TextField
+                        size="small"
+                        label="Breedte"
+                        type="number"
+                        value={column.width ?? ''}
+                        onChange={(event) => updateDraftColumn(column.name, { width: event.target.value ? Number(event.target.value) : null })}
+                        sx={{ width: 120 }}
+                      />
+                    </Stack>
+                    <Stack direction="row" spacing={1}>
+                      <TextField
+                        select
+                        size="small"
+                        label="Edit type"
+                        value={column.editType ?? 'readonly'}
+                        onChange={(event) => updateDraftColumn(column.name, { editType: event.target.value })}
+                        sx={{ flex: 1 }}
+                      >
+                        {builderEditTypes.map((option) => (
+                          <MenuItem
+                            key={option.value}
+                            value={option.value}
+                            disabled={!builderEditTypeFits(option.value, column.type)}
+                          >
+                            {option.label}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                      <FormControl size="small" sx={{ width: 128 }}>
+                        <Stack direction="row" alignItems="center" spacing={0.5} sx={{ height: 40 }}>
+                          <Checkbox
+                            checked={column.required === true}
+                            onChange={(event) => updateDraftColumn(column.name, { required: event.target.checked })}
+                            disabled={(column.editType ?? 'readonly') === 'readonly'}
+                          />
+                          <Typography variant="body2">Verplicht</Typography>
+                        </Stack>
+                      </FormControl>
+                    </Stack>
+                    {(column.editType ?? 'readonly') === 'number' && (
+                      <Stack direction="row" spacing={1}>
+                        <TextField
+                          size="small"
+                          label="Min"
+                          type="number"
+                          value={column.min ?? ''}
+                          onChange={(event) => updateDraftColumn(column.name, { min: event.target.value ? Number(event.target.value) : null })}
+                          sx={{ flex: 1 }}
+                        />
+                        <TextField
+                          size="small"
+                          label="Max"
+                          type="number"
+                          value={column.max ?? ''}
+                          onChange={(event) => updateDraftColumn(column.name, { max: event.target.value ? Number(event.target.value) : null })}
+                          sx={{ flex: 1 }}
+                        />
+                      </Stack>
+                    )}
+                  </Stack>
+                </Paper>
+              ))}
+            </Stack>
+          </Box>
+
+          <Box>
+            <Typography className="schema-builder-section-title" variant="caption">Directe relaties</Typography>
+            <List dense className="schema-builder-list">
+              {rootTable.relations.length === 0 && (
+                <ListItem dense disablePadding>
+                  <ListItemText primary="Geen directe foreign keys gevonden." />
+                </ListItem>
+              )}
+              {rootTable.relations.map((relation) => (
+                <ListItem key={`${relation.name}-${relation.column}`} dense disablePadding>
+                  <ListItemText
+                    primary={`${relation.column} -> ${relation.targetTable}.${relation.targetColumn}`}
+                    secondary={relation.supported ? 'Ondersteund als directe relatie' : relation.unsupportedReason}
+                  />
+                  <Chip size="small" color={relation.supported ? 'success' : 'warning'} label={relation.supported ? 'veilig' : 'later'} />
+                </ListItem>
+              ))}
+            </List>
+          </Box>
+        </Stack>
+      )}
+    </Stack>
+  );
+}
+
 function confidenceColor(confidence) {
   if (confidence === 'explicit') return 'success';
   if (confidence === 'inferred') return 'warning';
@@ -237,6 +754,17 @@ function LocationsLoadingFallback() {
   );
 }
 
+function PlanningLoadingFallback() {
+  return (
+    <Paper className="locations-toolbar" elevation={0}>
+      <Stack spacing={1}>
+        <Typography variant="h6">Planning laden</Typography>
+        <LinearProgress />
+      </Stack>
+    </Paper>
+  );
+}
+
 function LocationsLoadErrorFallback({ error, onRetry, onBackToTables }) {
   return (
     <Paper className="locations-toolbar" elevation={0}>
@@ -256,10 +784,37 @@ function LocationsLoadErrorFallback({ error, onRetry, onBackToTables }) {
   );
 }
 
+function PlanningLoadErrorFallback({ error, onRetry, onBackToTables }) {
+  return (
+    <Paper className="locations-toolbar" elevation={0}>
+      <Stack spacing={1.25}>
+        <Alert severity="warning">
+          Planning kon niet worden geladen. Controleer de API of probeer opnieuw.
+        </Alert>
+        <Typography variant="caption" color="text.secondary">
+          {error?.message ?? 'Onbekende laadfout'}
+        </Typography>
+        <Stack direction="row" spacing={1}>
+          <Button variant="contained" onClick={onRetry}>Opnieuw proberen</Button>
+          <Button variant="outlined" onClick={onBackToTables}>Terug naar tabellen</Button>
+        </Stack>
+      </Stack>
+    </Paper>
+  );
+}
+
 function App() {
   const [appTab, setAppTab] = useState('tables');
   const [locationsLoadAttempt, setLocationsLoadAttempt] = useState(0);
+  const [planningLoadAttempt, setPlanningLoadAttempt] = useState(0);
   const [schema, setSchema] = useState(null);
+  const [schemaCatalog, setSchemaCatalog] = useState(null);
+  const [schemaCatalogError, setSchemaCatalogError] = useState('');
+  const [tableViewDrafts, setTableViewDrafts] = useState([]);
+  const [tableViewDraftsError, setTableViewDraftsError] = useState('');
+  const [activeTableViewDraft, setActiveTableViewDraft] = useState(null);
+  const [savingTableViewDraft, setSavingTableViewDraft] = useState(false);
+  const [selectedRootTable, setSelectedRootTable] = useState('');
   const [state, setState] = useState(null);
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
@@ -267,19 +822,40 @@ function App() {
   const [stats, setStats] = useState([]);
   const [facetValues, setFacetValues] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [tableNotice, setTableNotice] = useState('');
   const [tab, setTab] = useState('columns');
   const [controlOpen, setControlOpen] = useState(true);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const LocationsPage = useMemo(createLocationsPageLoader, [locationsLoadAttempt]);
+  const PlanningPage = useMemo(createPlanningPageLoader, [planningLoadAttempt]);
 
   useEffect(() => {
     Promise.all([
       fetch(`${API_BASE}/api/schema`).then((response) => response.json()),
+      fetch(`${API_BASE}/api/schema-catalog`).then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      }).catch((error) => ({ error: error.message })),
+      fetch(`${API_BASE}/api/table-view-drafts`).then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      }).catch((error) => ({ error: error.message })),
       fetch(`${API_BASE}/api/stats`).then((response) => response.json()).catch(() => ({ tables: [] }))
-    ]).then(([schemaPayload, statsPayload]) => {
+    ]).then(([schemaPayload, catalogPayload, draftsPayload, statsPayload]) => {
       setSchema(schemaPayload);
       setState(loadState(schemaPayload));
+      if (catalogPayload.error) {
+        setSchemaCatalogError(catalogPayload.error);
+      } else {
+        setSchemaCatalog(catalogPayload);
+        setSelectedRootTable(catalogPayload.tables?.[0]?.name ?? '');
+      }
+      if (draftsPayload.error) {
+        setTableViewDraftsError(draftsPayload.error);
+      } else {
+        setTableViewDrafts(draftsPayload.drafts ?? []);
+      }
       setStats(statsPayload.tables ?? []);
     });
   }, []);
@@ -297,19 +873,39 @@ function App() {
       return aRank === bRank ? a.order - b.order : aRank - bRank;
     });
   }, [state]);
+  const editableColumnCount = useMemo(
+    () => state?.columns?.filter((column) => column.editable === true).length ?? 0,
+    [state?.columns]
+  );
 
   const columnDefs = useMemo(() => orderedColumns
     .filter((column) => column.visible)
-    .map((column) => ({
+    .map((column) => {
+      const selectValues = column.editType === 'singleSelect' ? column.options ?? [] : [];
+      const usesSelectEditor = column.editType === 'singleSelect';
+      return ({
       field: column.field,
       headerName: column.label,
+      headerComponent: TableColumnHeader,
+      headerComponentParams: {
+        editType: column.editType,
+        editable: column.editable === true,
+        readOnlyReason: column.readOnlyReason
+      },
       width: column.width,
       pinned: column.pin,
       sortable: true,
       resizable: true,
+      editable: column.editable === true,
+      cellEditor: usesSelectEditor ? 'agSelectCellEditor' : undefined,
+      cellEditorParams: usesSelectEditor ? { values: selectValues } : undefined,
+      singleClickEdit: column.editable === true,
+      cellClass: column.editable === true ? 'table-cell-editable' : 'table-cell-readonly',
+      valueParser: (params) => column.editType === 'number' || column.type === 'number' ? Number(params.newValue) : params.newValue,
       cellRenderer: (params) => highlight(params.value, state?.quick),
       valueFormatter: (params) => (typeof params.value === 'object' ? JSON.stringify(params.value) : params.value)
-    })), [orderedColumns, state?.quick]);
+    });
+    }), [orderedColumns, state?.quick]);
 
   useEffect(() => {
     if (!state) return;
@@ -408,10 +1004,84 @@ function App() {
     }));
   }
 
+  async function refreshTableViewDrafts() {
+    const response = await fetch(`${API_BASE}/api/table-view-drafts`);
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error ?? 'Drafts konden niet worden geladen.');
+    setTableViewDrafts(payload.drafts ?? []);
+    setTableViewDraftsError('');
+    return payload.drafts ?? [];
+  }
+
+  async function saveTableViewDraft(draft) {
+    setSavingTableViewDraft(true);
+    setTableViewDraftsError('');
+    try {
+      const response = await fetch(`${API_BASE}/api/table-view-drafts${draft.id ? `/${draft.id}` : ''}`, {
+        method: draft.id ? 'PUT' : 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(draft)
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        const message = Object.values(payload.fieldErrors ?? {})[0] ?? payload.error ?? 'Draft kon niet worden opgeslagen.';
+        throw new Error(message);
+      }
+      setActiveTableViewDraft(payload.draft);
+      setSelectedRootTable(payload.draft.rootTable);
+      await refreshTableViewDrafts();
+    } catch (error) {
+      setTableViewDraftsError(error.message);
+    } finally {
+      setSavingTableViewDraft(false);
+    }
+  }
+
+  async function openTableViewDraft(id) {
+    setTableViewDraftsError('');
+    try {
+      const response = await fetch(`${API_BASE}/api/table-view-drafts/${id}`);
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? 'Draft kon niet worden geopend.');
+      setActiveTableViewDraft(payload.draft);
+      setSelectedRootTable(payload.draft.rootTable);
+    } catch (error) {
+      setTableViewDraftsError(error.message);
+    }
+  }
+
+  async function updateConfiguredTableCell(event) {
+    const field = event.column?.getColId();
+    if (!field || event.oldValue === event.newValue) return;
+    const column = state.columns.find((item) => item.field === field);
+    if (!column?.editable) return;
+    const previousRows = rows;
+    setRows((current) => current.map((row) => row.id === event.data.id ? { ...row, [field]: event.newValue } : row));
+    setTableNotice(`${column.label ?? field} opslaan...`);
+    const response = await fetch(`${API_BASE}/api/rows/cell`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        table: state.table,
+        id: event.data.id,
+        field,
+        value: event.newValue
+      })
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      setRows(previousRows);
+      setTableNotice(payload.fieldErrors?.[field] ?? payload.error ?? 'Celwaarde kon niet worden opgeslagen');
+      return;
+    }
+    setTableNotice(`${column.label ?? field} opgeslagen`);
+    window.setTimeout(() => setTableNotice(''), 1800);
+  }
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Box className={`app-shell ${appTab === 'locations' ? 'app-shell-locations' : ''}`}>
+      <Box className={`app-shell ${appTab === 'locations' || appTab === 'planning' ? 'app-shell-locations' : ''}`}>
         <AppBar position="static" color="transparent" elevation={0}>
           <Toolbar className="topbar">
             <Box>
@@ -422,6 +1092,7 @@ function App() {
               <Tabs value={appTab} onChange={(_, value) => setAppTab(value)} className="app-tabs">
                 <Tab value="tables" label="Table Lab" />
                 <Tab value="locations" label="Locaties" />
+                <Tab value="planning" label="Planning" />
               </Tabs>
               <Stack direction="row" spacing={1} className="stats-chips">
                 {stats.map((item) => <Chip key={item.table_name} label={`${item.table_name}: ${item.total.toLocaleString('nl-BE')}`} />)}
@@ -450,6 +1121,26 @@ function App() {
           </FeatureLoadErrorBoundary>
         )}
 
+        {appTab === 'planning' && (
+          <FeatureLoadErrorBoundary
+            resetKey={planningLoadAttempt}
+            onRetry={() => setPlanningLoadAttempt((attempt) => attempt + 1)}
+            fallback={
+              ({ error, retry }) => (
+                <PlanningLoadErrorFallback
+                  error={error}
+                  onRetry={retry}
+                  onBackToTables={() => setAppTab('tables')}
+                />
+              )
+            }
+          >
+            <Suspense fallback={<PlanningLoadingFallback />}>
+              <PlanningPage />
+            </Suspense>
+          </FeatureLoadErrorBoundary>
+        )}
+
         {appTab === 'tables' && <Stack direction="row" spacing={2} className="workspace">
           <Paper className={controlOpen ? 'main-panel' : 'main-panel main-panel-full'} elevation={0}>
             <Stack direction="row" spacing={1.5} alignItems="center" className="query-bar">
@@ -458,6 +1149,15 @@ function App() {
                   {Object.entries(schema).map(([key, config]) => <MenuItem key={key} value={key}>{config.label}</MenuItem>)}
                 </Select>
               </FormControl>
+              {editableColumnCount > 0 && (
+                <Chip
+                  className="table-editability-chip"
+                  size="small"
+                  color="secondary"
+                  variant="outlined"
+                  label={`${editableColumnCount} bewerkbare kolommen`}
+                />
+              )}
               <TextField
                 size="small"
                 value={state.quick}
@@ -495,6 +1195,7 @@ function App() {
             </Stack>
 
             {loading && <LinearProgress />}
+            {tableNotice && <Alert severity={tableNotice.includes('kon niet') || tableNotice.includes('ongeldig') ? 'warning' : 'info'} onClose={() => setTableNotice('')}>{tableNotice}</Alert>}
             <Box className="ag-theme-quartz grid-box">
               <AgGridReact
                 rowData={rows}
@@ -502,6 +1203,9 @@ function App() {
                 rowHeight={44}
                 headerHeight={48}
                 suppressDragLeaveHidesColumns
+                stopEditingWhenCellsLoseFocus
+                singleClickEdit
+                onCellValueChanged={updateConfiguredTableCell}
                 onSortChanged={(event) => {
                   const sortModel = event.api.getColumnState()
                     .filter((column) => column.sort)
@@ -534,6 +1238,7 @@ function App() {
                 <Tab value="columns" icon={<Badge badgeContent={visibleCount} color="secondary"><ViewColumnIcon /></Badge>} label="Columns" />
                 <Tab value="values" label="Values" />
                 <Tab value="views" label="Views" />
+                <Tab value="builder" label="Builder" />
               </Tabs>
               <Divider />
 
@@ -594,6 +1299,37 @@ function App() {
                     </Paper>
                   ))}
                 </Stack>
+              )}
+
+              {tab === 'builder' && (
+                <SchemaBuilderPanel
+                  catalog={schemaCatalog}
+                  catalogError={schemaCatalogError}
+                  drafts={tableViewDrafts}
+                  draftsError={tableViewDraftsError}
+                  activeDraft={activeTableViewDraft}
+                  savingDraft={savingTableViewDraft}
+                  selectedRootTable={selectedRootTable}
+                  onSelectRootTable={(tableName) => {
+                    setSelectedRootTable(tableName);
+                    setActiveTableViewDraft(null);
+                  }}
+                  onUseTable={(table) => {
+                    if (!schema[table]) return;
+                    setState(stateForTable(schema, table));
+                  }}
+                  onOpenDraft={openTableViewDraft}
+                  onPreviewDraft={(draft) => {
+                    const previewState = stateForDraft(schema, draft);
+                    if (!previewState) return;
+                    setState(previewState);
+                    setAppTab('tables');
+                    setTab('columns');
+                    setTableNotice(`Preview actief: ${draft.name || draft.rootTable}`);
+                    window.setTimeout(() => setTableNotice(''), 2200);
+                  }}
+                  onSaveDraft={saveTableViewDraft}
+                />
               )}
             </Stack>
           </Drawer>}

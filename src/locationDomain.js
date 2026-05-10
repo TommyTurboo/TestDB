@@ -1,17 +1,27 @@
+import {
+  EDIT_TYPES,
+  getColumnInteraction,
+  getTableInteractionConfig,
+  isColumnEditable,
+  locationTableConfig,
+  validateCellValue
+} from './tableConfig.js';
+
 export const LOCATION_TREE_ROW_HEIGHT = 42;
 
-export const locationBaseColumns = [
-  { field: 'code', label: 'Code', type: 'text', width: 155 },
-  { field: 'name', label: 'Naam', type: 'text', width: 220 },
-  { field: 'type', label: 'Type', type: 'text', width: 155 },
-  { field: 'complexName', label: 'Complex', type: 'text', width: 230 },
-  { field: 'parentName', label: 'Parent', type: 'text', width: 220 },
-  { field: 'confidence', label: 'Confidence', type: 'text', width: 135 },
-  { field: 'sourcePage', label: 'Bronpagina', type: 'number', width: 120 },
-  { field: 'abbreviation', label: 'Afkorting', type: 'text', width: 120 },
-  { field: 'childCount', label: 'Kinderen', type: 'number', width: 110 },
-  { field: 'metadata', label: 'Metadata', type: 'jsonb', width: 260 }
-];
+export const locationInteractionConfig = getTableInteractionConfig('locations');
+
+export const locationBaseColumns = locationTableConfig.columns
+  .filter((column) => !['complexCode', 'source', 'sourceSection', 'parentId'].includes(column.field))
+  .map(({ field, label, type, width, editType, description, readOnlyReason }) => ({
+    field,
+    label,
+    type,
+    width,
+    editType,
+    description,
+    readOnlyReason
+  }));
 
 export const confidenceLabels = {
   explicit: 'Explicit',
@@ -19,19 +29,22 @@ export const confidenceLabels = {
   inferred: 'Inferred'
 };
 
-const editableLocationFields = new Set(['code', 'name', 'type', 'complexCode', 'complexName', 'abbreviation', 'source', 'sourcePage', 'sourceSection', 'confidence']);
-const staticAllowedValuesByColumn = {
-  status: ['explicit', 'derived', 'inferred'],
-  confidence: ['explicit', 'derived', 'inferred']
-};
+const staticAllowedValuesByColumn = Object.fromEntries(
+  locationInteractionConfig.columns
+    .filter((column) => column.editType === EDIT_TYPES.SINGLE_SELECT && Array.isArray(column.options))
+    .map((column) => [column.field, column.options])
+);
 
 export function defaultLocationColumns() {
-  return locationBaseColumns.map((column, index) => ({
+  return locationBaseColumns.map((column, index) => {
+    const configured = getColumnInteraction(locationInteractionConfig, column.field);
+    return {
     ...column,
-    visible: !['metadata', 'abbreviation'].includes(column.field),
+    visible: configured?.visible ?? !['metadata', 'abbreviation'].includes(column.field),
     order: index,
-    pin: column.field === 'code' ? 'left' : null
-  }));
+    pin: configured?.pin ?? (column.field === 'code' ? 'left' : null)
+  };
+  });
 }
 
 export function confidenceColor(confidence) {
@@ -69,7 +82,15 @@ export function getUniqueColumnValues(rows, field) {
 }
 
 export function isEditableLocationField(field) {
-  return editableLocationFields.has(field);
+  return isColumnEditable(locationInteractionConfig, field).editable;
+}
+
+export function getLocationColumnConfig(field) {
+  return getColumnInteraction(locationInteractionConfig, field);
+}
+
+export function validateLocationCellValue(field, value) {
+  return validateCellValue(locationInteractionConfig, field, value);
 }
 
 function allowedValuesFromUniqueRows(rows, field) {
@@ -78,7 +99,8 @@ function allowedValuesFromUniqueRows(rows, field) {
 
 export function getAllowedValuesForColumn(rows, field) {
   if (staticAllowedValuesByColumn[field]) return staticAllowedValuesByColumn[field];
-  if (field === 'type') return allowedValuesFromUniqueRows(rows, field);
+  const column = getLocationColumnConfig(field);
+  if (column?.editType === EDIT_TYPES.RELATION_SELECT) return allowedValuesFromUniqueRows(rows, field);
   return null;
 }
 
@@ -245,7 +267,9 @@ export function buildNextLocationRow(row, values, rows) {
   const nextRow = { ...row };
   Object.entries(values).forEach(([field, valueKey]) => {
     if (!isEditableLocationField(field)) return;
-    const value = valueKey === '' ? null : valueKey;
+    const validation = validateLocationCellValue(field, valueKey);
+    if (!validation.valid) return;
+    const value = validation.value;
     nextRow[field] = value;
 
     if (field === 'type') {
